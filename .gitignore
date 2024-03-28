@@ -6,6 +6,8 @@
 # Node artifact files
 node_modules/
 dist/
+msatutil.egg-info/
+notebooks/.ipynb_checkpoints
 
 # Compiled Java class files
 *.class

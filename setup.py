@@ -32,7 +32,7 @@ if os.path.exists(os.path.join(_mydir, ".git")):
         )
     version_str = f"{version_str}+git.{git_hash}"
 
-# extra dependencies for mair_geoviews.ipynb
+# extra dependencies for mair_geoviews.ipynb and loading csv straight from google cloud in make_spatial_index.py
 extras = {
     "notebooks": [
         "notebook",
@@ -41,6 +41,7 @@ extras = {
         "cartopy",
         "geoviews",
         "datashader",
+        "gcsfs",
     ],
 }
 
@@ -65,6 +66,7 @@ setup(
         "scipy",
         "tqdm",
         "google-cloud-storage",
+        "pyogrio"
     ],
     extras_require=extras,
     packages=find_packages(),
