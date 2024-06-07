@@ -1,12 +1,14 @@
 import argparse
 from typing import Optional
 from msatutil.msat_dset import cloud_file
+import numpy as np
 import pandas as pd
 import re
+from typing import Union
 
 
 def mair_ls(
-    in_path: str,
+    in_path: Union[str, pd.DataFrame],
     flight_name: Optional[str] = None,
     uri: Optional[str] = None,
     aggregation: Optional[str] = None,
@@ -19,11 +21,17 @@ def mair_ls(
     time_start: Optional[str] = None,
     time_end: Optional[str] = None,
     molecule: Optional[str] = None,
+    type: Optional[str] = None,
     latest: bool = False,
     show: bool = True,
 ):
-    with cloud_file(in_path) as csv_in:
-        df = pd.read_csv(csv_in, dtype={"time_start": str})
+    if isinstance(in_path, str):
+        with cloud_file(in_path) as csv_in:
+            df = pd.read_csv(csv_in)  # load from path
+    elif isinstance(in_path, pd.DataFrame):
+        df = in_path  # use pre-loaded catalogue for efficiency
+    else:
+        raise TypeError("in_path must be either a string representing a path or a pandas DataFrame")
 
     for k in ["production_timestamp", "time_start", "time_end", "flight_date"]:
         if (k is not None) and (k in df.columns):
@@ -37,12 +45,13 @@ def mair_ls(
         "production_operation": production_operation,
         "production_environment": production_environment,
         "molecule": molecule,
+        "type": type,
     }.items():
         if (v is not None) and (k in df.columns):
             df = df.loc[df[k].str.lower() == v.lower()]
 
     # string contains checks
-    for k, v in {"level3_target_name": target_name, "uri": uri}.items():
+    for k, v in {"target": target_name, "uri": uri}.items():
         if (v is not None) and (k in df.columns):
             df = df.loc[df[k].str.contains(v, na=False, case=False)]
 
@@ -95,6 +104,54 @@ def mair_ls(
             print(i)
 
     return df.reset_index().drop(columns=["index"])
+
+
+def mair_ls_serial(catalogue, latest=False, **kwargs) -> pd.DataFrame:
+    """
+    Calls mair_ls in a loop over flight names, if latest==True. Otherwise, simply returns the unfiltered catalogue. Useful for specifying
+    latest=True, when the latest version *for each flight* is desired.
+
+    kwargs are passed to mair_ls. Don't specifiy `flight_name` or `show` in kwargs
+
+    Parameters
+    ----------
+    catalogue : str or pd.DataFrame
+        _description_
+    latest : bool, optional
+        Passes `latest=True` to mair_ls, by default False
+
+    Returns
+    -------
+    pd.DataFrame
+        Output of mair_ls
+
+    Raises
+    ------
+    TypeError
+        if catalogue is not str or pd.DataFrame
+    """
+    if isinstance(catalogue, str):
+        catalogue_pth = catalogue
+        catalogue = mair_ls(catalogue_pth, show=False, **kwargs)  # load from path
+    elif isinstance(catalogue, pd.DataFrame):
+        pass  # use pre-loaded catalogue
+    else:
+        raise TypeError(
+            "catalogue must be either a string representing a path or a pandas DataFrame"
+        )
+    if latest == False:
+        return catalogue
+    flight_name_key = "flight_name"
+    unq_flights = np.unique(catalogue[flight_name_key])
+    latest_segments_concat = []  # init
+    for flight in unq_flights:
+        latest_segments = mair_ls(catalogue, flight_name=flight, show=False, latest=True, **kwargs)
+        latest_segments_concat.append(latest_segments)
+    catalogue_filtered = pd.concat(latest_segments_concat, ignore_index=True)
+    assert len(catalogue_filtered) <= len(
+        catalogue
+    ), "The catalogue appears not to be filtered. Did you specify any keyword arguments?"
+    return catalogue_filtered
 
 
 def create_parser(**kwargs):
@@ -167,6 +224,12 @@ def create_parser(**kwargs):
         type=str,
         default=None,
         help="production environment e.g. prod or stag or dev",
+    )
+    parser.add_argument(
+        "--type",
+        type=str,
+        default=None,
+        help="product type e.g. mosaic or regrid",
     )
     parser.add_argument(
         "--latest",
