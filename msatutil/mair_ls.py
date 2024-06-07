@@ -31,8 +31,7 @@ def mair_ls(
     elif isinstance(in_path, pd.DataFrame):
         df = in_path  # use pre-loaded catalogue for efficiency
     else:
-        raise TypeError(
-            "in_path must be either a string representing a path or a pandas DataFrame")
+        raise TypeError("in_path must be either a string representing a path or a pandas DataFrame")
 
     for k in ["production_timestamp", "time_start", "time_end", "flight_date"]:
         if (k is not None) and (k in df.columns):
@@ -108,8 +107,8 @@ def mair_ls(
 
 
 def mair_ls_serial(catalogue, latest=False, **kwargs) -> pd.DataFrame:
-    '''
-    Calls mair_ls in a loop over flight names, if latest==True. Otherwise, simply returns the unfiltered catalogue. Useful for specifying 
+    """
+    Calls mair_ls in a loop over flight names, if latest==True. Otherwise, simply returns the unfiltered catalogue. Useful for specifying
     latest=True, when the latest version *for each flight* is desired.
 
     kwargs are passed to mair_ls. Don't specifiy `flight_name` or `show` in kwargs
@@ -130,28 +129,28 @@ def mair_ls_serial(catalogue, latest=False, **kwargs) -> pd.DataFrame:
     ------
     TypeError
         if catalogue is not str or pd.DataFrame
-    '''
+    """
     if isinstance(catalogue, str):
         catalogue_pth = catalogue
-        catalogue = mair_ls(catalogue_pth, show=False,
-                            **kwargs)  # load from path
+        catalogue = mair_ls(catalogue_pth, show=False, **kwargs)  # load from path
     elif isinstance(catalogue, pd.DataFrame):
         pass  # use pre-loaded catalogue
     else:
         raise TypeError(
-            "catalogue must be either a string representing a path or a pandas DataFrame")
+            "catalogue must be either a string representing a path or a pandas DataFrame"
+        )
     if latest == False:
         return catalogue
-    flight_name_key = 'flight_name'
+    flight_name_key = "flight_name"
     unq_flights = np.unique(catalogue[flight_name_key])
     latest_segments_concat = []  # init
     for flight in unq_flights:
-        latest_segments = mair_ls(
-            catalogue, flight_name=flight, show=False, latest=True, **kwargs)
+        latest_segments = mair_ls(catalogue, flight_name=flight, show=False, latest=True, **kwargs)
         latest_segments_concat.append(latest_segments)
     catalogue_filtered = pd.concat(latest_segments_concat, ignore_index=True)
     assert len(catalogue_filtered) <= len(
-        catalogue), "The catalogue appears not to be filtered. Did you specify any keyword arguments?"
+        catalogue
+    ), "The catalogue appears not to be filtered. Did you specify any keyword arguments?"
     return catalogue_filtered
 
 
