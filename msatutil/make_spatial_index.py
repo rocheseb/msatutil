@@ -346,13 +346,13 @@ def main():
         epilog="""
         Examples
         --------
-        python msatutil/make_spatial_index.py -c gs://msat-dev-science-data/L3.csv -w /tmp -s 0.003 -a -t mosaic
-        python msatutil/make_spatial_index.py -c gs://msat-dev-science-data/L3.csv -w /tmp -s 0.003 -a -t regrid -e 30m -u priority-target
+        python msatutil/make_spatial_index.py -c gs://path/to/L3.csv -w /tmp -s 0.003 -a -t mosaic
+        python msatutil/make_spatial_index.py -c gs://path/to/L3.csv -w /tmp -s 0.003 -a -t regrid -e 30m -u priority-target
         
         Dataset paths:
         --------
-        L2pp: gs://msat-dev-science-data/L2_pp.csv
-        L3 segments/mosaics: gs://msat-dev-science-data/L3.csv
+        L2pp: gs://path/to/L2_pp.csv
+        L3 segments/mosaics: gs://path/to/L3.csv
 
         """,
         formatter_class=argparse.RawTextHelpFormatter,
