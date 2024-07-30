@@ -367,7 +367,7 @@ def main():
     mair_gs_db(file_list, timestamp_list, args.outfile, level=args.level)
 
     if args.out_gs is not None:
-        subprocess.run(f"gsutil cp {args.outfile} {args.out_gs}")
+        subprocess.run(f"gsutil cp {args.outfile} {args.out_gs}",shell=True)
 
 
 if __name__ == "__main__":
