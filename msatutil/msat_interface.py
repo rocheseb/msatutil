@@ -680,7 +680,11 @@ class msat_collection:
         if var == "dp" and self.msat_files[self.ids[0]].dp is None:
             self.read_dp()
 
-        var_path = self.fetch_varpath(var, grp=grp)
+        if "/" in var:
+            var_path = var
+            grp, var = var.split("/")
+        else:
+            var_path = self.fetch_varpath(var, grp=grp)
         var_dim_map = self.get_dim_map(var_path)
         if sv_var is not None:
             nc_slice = [slice(None) for dim in var_dim_map]
