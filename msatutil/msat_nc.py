@@ -419,7 +419,7 @@ class msat_nc:
 
         varpath (Optional[str]): full variable path. If given, use it to get the valid slice
         """
-        if self.is_l2_met or self.is_l3 or self.is_labels:
+        if self.is_l3 or self.is_labels:
             return slice(None)
 
         is_msat = self.dim_size_map["xtrack"] == 2048
@@ -428,7 +428,7 @@ class msat_nc:
             longitude_varpath = "geolocation/longitude"
         elif self.is_l2:
             longitude_varpath = "Level1/Longitude"
-        elif self.is_l1:
+        elif self.is_l1 or self.is_l2_met:
             longitude_varpath = "Geolocation/Longitude"
 
         if varpath is not None:
