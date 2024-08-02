@@ -17,6 +17,7 @@ from holoviews.plotting import list_cmaps
 from holoviews.plotting.util import process_cmap
 import geoviews as gv
 from geoviews.tile_sources import EsriImagery
+from geoviews.element import WMTS
 import panel as pn
 
 from msatutil.msat_dset import msat_dset, gs_list
@@ -142,7 +143,7 @@ def show_map(
             cmap=cmap,
             colorbar=True,
             alpha=0,
-            title="Imagery",
+            title=f"Tile source: {background_tile_list[0].name}",
         )
         if clim is not False:
             dummy.opts(clim=clim)
@@ -192,7 +193,9 @@ def save_static_plot_with_widgets(
             for fig in bokeh_plot.children
             if type(fig[0].renderers[1].glyph) is bokeh.models.glyphs.Image
         ]
-        imagery_panel = np.where([fig[0].title.text == "Imagery" for fig in bokeh_plot.children])[0]
+        imagery_panel = np.where(
+            [fig[0].title.text.startswith("Tile source") for fig in bokeh_plot.children]
+        )[0]
         if imagery_panel.size > 0:
             # when there is a panel with only imagery
             # remove the colorbar from that panel
@@ -359,7 +362,15 @@ def set_background_tile_list(background_tile_name_list: Optional[list[str]] = No
     if background_tile_name_list is None:
         background_tile_list = [EsriImagery]
     else:
+        GoogleMapsImagery = WMTS(
+            "https://mt1.google.com/vt/lyrs=s&x={X}&y={Y}&z={Z}", name="GoogleMapsImagery"
+        )
+        BingMapsImagery = WMTS(
+            "http://ecn.t3.tiles.virtualearth.net/tiles/a{Q}.jpeg?g=1", name="BingMapsImagery"
+        )
         tile_dict = {k.lower(): v for k, v in gv.tile_sources.__dict__["tile_sources"].items()}
+        tile_dict["googlemapsimagery"] = GoogleMapsImagery
+        tile_dict["bingmapsimagery"] = BingMapsImagery
         background_tile_list = ["" for i in background_tile_name_list]
         for i, background_tile_name in enumerate(background_tile_name_list):
             if background_tile_name.lower() not in tile_dict:
