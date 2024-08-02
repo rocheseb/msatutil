@@ -71,6 +71,8 @@ class msat_nc:
             "lev": "lev",
             "level": "lev",
             "levels": "lev",
+            "ch4band_levels": "ch4_lev",
+            "o2band_levels": "o2_lev",
             "z": "lev",
             "lmx_e": "lev_edge",
             "lev_edge": "lev_edge",

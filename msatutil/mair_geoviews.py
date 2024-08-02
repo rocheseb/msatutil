@@ -31,15 +31,20 @@ import subprocess
 hv.extension("bokeh")
 
 
+CONTEXT_L1_VARIABLES = [
+    "Geolocation/SurfaceAltitude",
+    "Geolocation/ViewingZenithAngle",
+]
+
 CONTEXT_L2_VARIABLES = [
     "Level1/SurfaceAltitude",
     "Level1/ViewingZenithAngle",
 ]
 
 CONTEXT_L2PP_VARIABLES = [
-    "apriori_data/surface_pressure",
-    "o2dp_fit_diagnostics/bias_corrected_delta_pressure",
     "co2proxy_fit_diagnostics/retrieved_albedo_1606nm",
+    "o2dp_fit_diagnostics/bias_corrected_delta_pressure",
+    "apriori_data/surface_pressure",
     "product_co2proxy/main_quality_flag",
 ]
 
@@ -53,6 +58,7 @@ CONTEXT_L3_VARIABLES = [
 ]
 
 CONTEXT_VARIABLES_DICT = {
+    "l1": CONTEXT_L1_VARIABLES,
     "l2": CONTEXT_L2_VARIABLES,
     "l2pp": CONTEXT_L2PP_VARIABLES,
     "l3": CONTEXT_L3_VARIABLES,
@@ -287,17 +293,21 @@ def read_variables(
     lon_var: str = "lon",
     lat_var: str = "lat",
     num_samples_threshold: Optional[float] = None,
+    option: Optional[str] = None,
+    option_axis_dim: str = "spectral_channel",
 ):
     var_list = []
     if in_path.endswith(".nc"):
         with msat_dset(in_path) as nc:
             lon = nc[lon_var][:]
             lat = nc[lat_var][:]
-            for var in variables:
+            for i, var in enumerate(variables):
                 v = nc[var][:]
                 if num_samples_threshold is not None:
                     num_samples = nc["num_samples"][:]
                     v[num_samples < num_samples_threshold] = np.nan
+                if i == 0 and option is not None:
+                    v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
                 var_list += [v]
             title_list = [
                 f"{var} ({nc[var].units})" if hasattr(nc[var], "units") else var
@@ -305,12 +315,28 @@ def read_variables(
             ]
     else:
         with get_msat(in_path) as msat_data:
-            msat_data.valid_xtrack = msat_data.get_valid_xtrack(var)
+            # make the valid cross track check on the variable to plot
+            # if it is as 3D variable make it on the longitude variable
+            # sometimes longitude has 1 extra valid cross track on each side
+            valid_check_var = variables[0] if not option else lon_var
+            msat_data.valid_xtrack = msat_data.get_valid_xtrack(valid_check_var)
             lon = msat_data.pmesh_prep(lon_var, use_valid_xtrack=True).compute()
             lat = msat_data.pmesh_prep(lat_var, use_valid_xtrack=True).compute()
+            # read the first variable alone as it can take in an operation
             var_list = [
-                msat_data.pmesh_prep(var, use_valid_xtrack=True).compute() for var in variables
+                msat_data.pmesh_prep(
+                    variables[0],
+                    use_valid_xtrack=True,
+                    option=option,
+                    option_axis_dim=option_axis_dim,
+                ).compute()
             ]
+            # read the rest of the variables if they exist
+            if len(variables) > 1:
+                var_list += [
+                    msat_data.pmesh_prep(var, use_valid_xtrack=True).compute()
+                    for var in variables[1:]
+                ]
             nc = msat_data.dsets[msat_data.ids[0]]
             title_list = [
                 f"{var} ({nc[var].units})" if hasattr(nc[var], "units") else var
@@ -366,6 +392,8 @@ def do_html_plot(
     pixel_ratio: int = 1,
     add_standalone_imagery: bool = False,
     ncols: int = 3,
+    option: Optional[str] = None,
+    option_axis_dim: str = "spectral_channel",
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -392,6 +420,8 @@ def do_html_plot(
     pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
     add_standalone_imagery (bool): if True, add a panel with only the imagery
     ncols (int): number of columns the panels will be arranged in
+    option (Optional[str]): numpy operation to apply on the first variable
+    option_axis_dim (str): dimension name along which the option will be applied
     """
     out_file = set_outfile(in_path, out_path)
 
@@ -401,6 +431,8 @@ def do_html_plot(
         lon_var=lon_var,
         lat_var=lat_var,
         num_samples_threshold=num_samples_threshold,
+        option=option,
+        option_axis_dim=option_axis_dim,
     )
 
     if title:
@@ -418,6 +450,12 @@ def do_html_plot(
         width = 550
         height = 450
 
+    clim_list = [None for i in var_list]
+    clim_list[0] = clim
+    for i, var in enumerate(variables):
+        if i > 0 and "delta_pressure" in var:
+            clim_list[i] = (-20, 20)
+
     plot_list = [
         show_map(
             lon,
@@ -425,7 +463,7 @@ def do_html_plot(
             var,
             title=title_list[i],
             cmap=cmap,
-            clim=clim if i == 0 else None,
+            clim=clim_list[i],
             width=width,
             height=height,
             alpha=alpha,
@@ -441,6 +479,7 @@ def do_html_plot(
             lat,
             var_list[-1],
             title=title_list[-1],
+            clim=clim_list[-1],
             cmap=cmap,
             width=width,
             height=height,
@@ -743,8 +782,20 @@ def create_plot_parser(**kwargs):
     plot_parser.add_argument(
         "--add-context",
         default="",
-        choices=["l2", "l2pp", "l3"],
+        choices=["l1", "l2", "l2pp", "l3"],
         help="add some default variables to the --variables",
+    )
+    plot_parser.add_argument(
+        "--option",
+        type=str,
+        default=None,
+        help="one of numpy operations to apply on the first --variable (e.g. nanmean)",
+    )
+    plot_parser.add_argument(
+        "--option-axis-dim",
+        type=str,
+        default="spectral_channel",
+        help="dimension name along which --option will be applied",
     )
     return plot_parser
 
@@ -862,6 +913,8 @@ def main():
                 layout_title=args.layout_title,
                 layout_details=args.layout_details,
                 browser_tab_title=args.tab_title,
+                option=args.option,
+                option_axis_dim=args.option_axis_dim,
             )
 
     elif os.path.splitext(args.in_path)[1] != "" or args.use_get_msat:
@@ -888,6 +941,8 @@ def main():
             layout_title=args.layout_title,
             layout_details=args.layout_details,
             browser_tab_title=args.tab_title,
+            option=args.option,
+            option_axis_dim=args.option_axis_dim,
         )
     else:
         # If in_path points to a directory structured as expected by L3_mosaics_to_html
