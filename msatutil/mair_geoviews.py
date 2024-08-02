@@ -6,9 +6,8 @@ import numpy as np
 import argparse
 import inspect
 
-os.environ["BOKEH_PY_LOG_LEVEL"] = "error"
 import bokeh
-from bokeh.models import CustomJS, Slider, Column, Select, Row
+from bokeh.models import CustomJS, Slider, Column, Select, Row, Div, Span, CrosshairTool
 from bokeh.resources import CDN
 from bokeh.embed import file_html
 
@@ -32,11 +31,45 @@ import subprocess
 hv.extension("bokeh")
 
 
+CONTEXT_L1_VARIABLES = [
+    "Geolocation/SurfaceAltitude",
+    "Geolocation/ViewingZenithAngle",
+]
+
+CONTEXT_L2_VARIABLES = [
+    "Level1/SurfaceAltitude",
+    "Level1/ViewingZenithAngle",
+]
+
+CONTEXT_L2PP_VARIABLES = [
+    "co2proxy_fit_diagnostics/retrieved_albedo_1606nm",
+    "o2dp_fit_diagnostics/bias_corrected_delta_pressure",
+    "apriori_data/surface_pressure",
+    "product_co2proxy/main_quality_flag",
+]
+
+CONTEXT_L3_VARIABLES = [
+    "apriori_data/albedo_ch4band",
+    "apriori_data/surface_pressure",
+    "o2dp_fit_diagnostics/bias_corrected_delta_pressure",
+    "apriori_data/zonal_wind",
+    "apriori_data/meridional_wind",
+    "num_samples",
+]
+
+CONTEXT_VARIABLES_DICT = {
+    "l1": CONTEXT_L1_VARIABLES,
+    "l2": CONTEXT_L2_VARIABLES,
+    "l2pp": CONTEXT_L2PP_VARIABLES,
+    "l3": CONTEXT_L3_VARIABLES,
+}
+
+
 def show_map(
     x,
     y,
     z,
-    width: int = 450,
+    width: int = 550,
     height: int = 450,
     cmap: str = "viridis",
     clim: Optional[Union[Tuple[float, float], bool]] = None,
@@ -109,6 +142,7 @@ def show_map(
             cmap=cmap,
             colorbar=True,
             alpha=0,
+            title="Imagery",
         )
         if clim is not False:
             dummy.opts(clim=clim)
@@ -123,28 +157,63 @@ def show_map(
     return plot
 
 
-def save_static_plot_with_widgets(out_file: str, plot, alpha: float = 1.0, cmap: str = "viridis"):
+def save_static_plot_with_widgets(
+    out_file: str,
+    plot,
+    alpha: float = 1.0,
+    cmap: str = "viridis",
+    browser_tab_title: str = "MethaneSAT",
+    layout_title: str = "",
+    layout_details: str = "",
+) -> None:
     """
     Save the output of show_map to a html file
 
     transform into a bokeh object
     add an alpha slider and a colormap selector
     save as an html file
+
+    Inputs:
+        out_file (str): full path to output html file
+        plot: holoviews layout object
+        alpha (float): initial heatmap alpha
+        cmap (str): initial colormap
+        browser_tab_title (str): the title of the tab in the browser
+        layout_title (str): text for a title Div above the layout
     """
 
+    # Convert the holoviews layout object to a bokeh object
     bokeh_plot = hv.render(plot, backend="bokeh")
 
     if type(bokeh_plot) is bokeh.models.plots.GridPlot:
-        glyph = bokeh_plot.children[0][0].renderers[1].glyph
-        # get rid of the dummy legend
-        bokeh_plot.children[0][0].min_border_right = 100
-        bokeh_plot.children[1][0].min_border_right = 100
-        bokeh_plot.children[1][0].right[0].visible = False
+        # Layout of multiple figures
+        glyph_list = [
+            fig[0].renderers[1].glyph
+            for fig in bokeh_plot.children
+            if type(fig[0].renderers[1].glyph) is bokeh.models.glyphs.Image
+        ]
+        imagery_panel = np.where([fig[0].title.text == "Imagery" for fig in bokeh_plot.children])[0]
+        if imagery_panel.size > 0:
+            # when there is a panel with only imagery
+            # remove the colorbar from that panel
+            # set fixed borders to all panels so they keep the same dimensions
+            for fig in bokeh_plot.children:
+                fig[0].min_border_right = 100
+            bokeh_plot.children[imagery_panel[0]][0].right[0].visible = False
+        # add linked crosshairs
+        width = Span(dimension="width", line_dash="dashed")
+        height = Span(dimension="height", line_dash="dashed")
+        for fig in bokeh_plot.children:
+            fig[0].add_tools(CrosshairTool(overlay=[width, height]))
     elif type(bokeh_plot) is bokeh.plotting._figure.figure:
-        glyph = bokeh_plot.renderers[1].glyph
+        # Single figure
+        glyph_list = [bokeh_plot.renderers[1].glyph]
 
     # alpha slider
-    callback = CustomJS(args={"plot": glyph}, code="plot.global_alpha = cb_obj.value;")
+    callback = CustomJS(
+        args={"glyphs": glyph_list},
+        code="for (var i=0;i<glyphs.length;i++){glyphs[i].global_alpha = cb_obj.value;};",
+    )
     alpha_slider = Slider(start=0, end=1.0, step=0.1, value=alpha, title="Heatmap alpha")
     alpha_slider.js_on_change("value", callback)
 
@@ -161,64 +230,44 @@ def save_static_plot_with_widgets(out_file: str, plot, alpha: float = 1.0, cmap:
         title="Colormap",
     )
     callback = CustomJS(
-        args={"glyph": glyph, "palette_dict": palette_dict},
-        code="glyph.color_mapper.palette = palette_dict[cb_obj.value];",
+        args={"glyphs": glyph_list, "palette_dict": palette_dict},
+        code="""for (var i=0;i<glyphs.length;i++){
+        glyphs[i].color_mapper.palette = palette_dict[cb_obj.value];
+        };""",
     )
     palette_select.js_on_change("value", callback)
 
-    bokeh_layout = Column(bokeh_plot, Row(palette_select, alpha_slider))
+    flexbox_elements = []
+    if layout_title:
+        text_settings = "font-family: 'Arial, sans-serif'; font-size: 24px; font-weight: bold;"
+        flexbox_elements.append(
+            Div(text=f'<p style="{text_settings}">{layout_title}</p>', width=1000, height=30)
+        )
+    if layout_details:
+        text_settings = "font-family: 'Arial, sans-serif'; font-size: 14px;"
+        flexbox_elements.append(
+            Div(text=f'<p style="{text_settings}">{layout_details}</p>', width=1000, height=20)
+        )
+    flexbox_elements.append(bokeh_plot)
+    flexbox_elements.append(Row(palette_select, alpha_slider))
+    bokeh_layout = Column(*flexbox_elements)
 
     with open(out_file, "w") as out:
-        out.write(file_html(bokeh_layout, CDN, "MethaneAIR map"))
+        out.write(file_html(bokeh_layout, CDN, browser_tab_title, suppress_callback_warning=True))
 
     print(out_file)
 
 
-def split_var(var: str) -> tuple[Optional[str], str]:
-    grp = None
-    if "/" in var:
-        grp, var = var.split("/")
-    return grp, var
-
-
-def do_single_map(
-    in_path: str,
-    var: str,
-    lon_var: str = "lon",
-    lat_var: str = "lat",
-    out_path: Optional[str] = None,
-    title: str = "",
-    cmap: str = "viridis",
-    clim: Optional[Union[Tuple[float, float], bool]] = None,
-    width: int = 850,
-    height: int = 750,
-    alpha: float = 1,
-    panel_serve: bool = False,
-    single_panel: bool = False,
-    background_tile_name_list: Optional[List[str]] = None,
-    num_samples_threshold: Optional[float] = None,
-    pixel_ratio: int = 1,
-) -> None:
+def set_outfile(in_path: str, out_path: str) -> str:
     """
-    Save a html plot of var from in_path
+    Determine the output html file path
 
+    Inputs:
     in_path (str): full path to the input netcdf data file, can be a gs:// path. OR full path to input directory
-    var (str): variable name in the data file
-    lon_var (str): name of the longitude variable
-    lat_var (str): name of the latitude variable
     out_path (Optional[str]): full path to the output .html file or to a directory where it will be saved.
                               If None, save output html file in the current working directory
-    title (str): title of the plot (include field name and units here)
-    cmap (str): colormap name
-    clim (Optional[Union[Tuple[float, float],bool]]): z-limits for the colorbar, give False to use dynamic colorbar
-    width (int): plot width in pixels
-    height (int): plot height in pixels
-    panel_serve (bool): if True, start an interactive session
-    single_panel (bool): if True, do not add the linked panel with only esri imagery
-    background_tile_name_list (Optional[List[str]]): name of the background tile from https://holoviews.org/reference/elements/bokeh/Tiles.html (case insensitive)
-                                                    for the main (last value) and linked (first value) panels
-    num_samples_threshold (Optional[float]): filter out data with num_samples<num_samples_threshold
-    pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
+    Outputs:
+    out_file (str): full path to the output html file
     """
     if in_path.endswith(".nc"):
         default_html_filename = os.path.basename(in_path).replace(".nc", ".html")
@@ -235,24 +284,81 @@ def do_single_map(
             os.makedirs(os.path.dirname(out_path))
         out_file = out_path
 
+    return out_file
+
+
+def read_variables(
+    in_path: str,
+    variables: list[str],
+    lon_var: str = "lon",
+    lat_var: str = "lat",
+    num_samples_threshold: Optional[float] = None,
+    option: Optional[str] = None,
+    option_axis_dim: str = "spectral_channel",
+):
+    var_list = []
     if in_path.endswith(".nc"):
         with msat_dset(in_path) as nc:
             lon = nc[lon_var][:]
             lat = nc[lat_var][:]
-            v = nc[var][:]
-            if num_samples_threshold is not None:
-                num_samples = nc["num_samples"][:]
-                v[num_samples < num_samples_threshold] = np.nan
+            for i, var in enumerate(variables):
+                v = nc[var][:]
+                if num_samples_threshold is not None:
+                    num_samples = nc["num_samples"][:]
+                    v[num_samples < num_samples_threshold] = np.nan
+                if i == 0 and option is not None:
+                    v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
+                var_list += [v]
+            title_list = [
+                f"{var} ({nc[var].units})" if hasattr(nc[var], "units") else var
+                for var in variables
+            ]
     else:
         with get_msat(in_path) as msat_data:
-            grp, lon_var = split_var(lon_var)
-            lon = msat_data.pmesh_prep(lon_var, grp=grp, use_valid_xtrack=True).compute()
-            grp, lat_var = split_var(lat_var)
-            lat = msat_data.pmesh_prep(lat_var, grp=grp, use_valid_xtrack=True).compute()
-            grp, var = split_var(var)
-            v = msat_data.pmesh_prep(var, grp=grp, use_valid_xtrack=True).compute()
+            # make the valid cross track check on the variable to plot
+            # if it is as 3D variable make it on the longitude variable
+            # sometimes longitude has 1 extra valid cross track on each side
+            valid_check_var = variables[0] if not option else lon_var
+            msat_data.valid_xtrack = msat_data.get_valid_xtrack(valid_check_var)
+            lon = msat_data.pmesh_prep(lon_var, use_valid_xtrack=True).compute()
+            lat = msat_data.pmesh_prep(lat_var, use_valid_xtrack=True).compute()
+            # read the first variable alone as it can take in an operation
+            var_list = [
+                msat_data.pmesh_prep(
+                    variables[0],
+                    use_valid_xtrack=True,
+                    option=option,
+                    option_axis_dim=option_axis_dim,
+                ).compute()
+            ]
+            # read the rest of the variables if they exist
+            if len(variables) > 1:
+                var_list += [
+                    msat_data.pmesh_prep(var, use_valid_xtrack=True).compute()
+                    for var in variables[1:]
+                ]
+            nc = msat_data.dsets[msat_data.ids[0]]
+            title_list = [
+                f"{var} ({nc[var].units})" if hasattr(nc[var], "units") else var
+                for var in variables
+            ]
 
-    if background_tile_name_list is not None:
+    return lon, lat, var_list, title_list
+
+
+def set_background_tile_list(background_tile_name_list: Optional[list[str]] = None):
+    """
+    Convert list of background tile names into list of background tile objects
+
+    Inputs:
+        background_tile_name_list (list[str]): list of background tile names
+
+    Outputs:
+        background_tile_list (list): list of background tiles
+    """
+    if background_tile_name_list is None:
+        background_tile_list = [EsriImagery]
+    else:
         tile_dict = {k.lower(): v for k, v in gv.tile_sources.__dict__["tile_sources"].items()}
         background_tile_list = ["" for i in background_tile_name_list]
         for i, background_tile_name in enumerate(background_tile_name_list):
@@ -261,22 +367,141 @@ def do_single_map(
             else:
                 background_tile_list[i] = tile_dict[background_tile_name.lower()]
 
-    plot = show_map(
-        lon,
-        lat,
-        v,
-        title=title,
-        cmap=cmap,
-        clim=clim,
-        width=width,
-        height=height,
-        alpha=alpha,
-        single_panel=single_panel,
-        background_tile_list=background_tile_list,
-        pixel_ratio=pixel_ratio,
+    return background_tile_list
+
+
+def do_html_plot(
+    in_path: str,
+    variables: list[str],
+    lon_var: str = "lon",
+    lat_var: str = "lat",
+    out_path: Optional[str] = None,
+    title: str = "",
+    layout_title: str = "",
+    layout_details: str = "",
+    browser_tab_title: str = "MethaneAIR map",
+    cmap: str = "viridis",
+    clim: Optional[Union[Tuple[float, float], bool]] = None,
+    width: int = 850,
+    height: int = 750,
+    alpha: float = 1,
+    panel_serve: bool = False,
+    single_panel: bool = False,
+    background_tile_name_list: Optional[List[str]] = None,
+    num_samples_threshold: Optional[float] = None,
+    pixel_ratio: int = 1,
+    add_standalone_imagery: bool = False,
+    ncols: int = 3,
+    option: Optional[str] = None,
+    option_axis_dim: str = "spectral_channel",
+) -> None:
+    """
+    Save a html plot of var from in_path
+
+    in_path (str): full path to the input netcdf data file, can be a gs:// path. OR full path to input directory
+    variables (str): list of variable paths in the data file
+    lon_var (str): longitude variable path in the data file
+    lat_var (str): latitude variable path in the data file
+    out_path (Optional[str]): full path to the output .html file or to a directory where it will be saved.
+                              If None, save output html file in the current working directory
+    title (str): title of the first plot (include field name and units here)
+    layout_title (str): overall title that will appear in a Div above the plots
+    layout_details (str): normal text between layout_title and the plots
+    browser_tab_title (str): text to be displayed in the browser tab
+    cmap (str): colormap name
+    clim (Optional[Union[Tuple[float, float],bool]]): z-limits for the colorbar, give False to use dynamic colorbar
+    width (int): plot width in pixels, the colorbar is ~100 wide so width should be height+100 to make squares
+    height (int): plot height in pixels
+    panel_serve (bool): if True, start an interactive session
+    single_panel (bool): if True, do not add the linked panel with only esri imagery
+    background_tile_name_list (Optional[List[str]]): name of the background tile from https://holoviews.org/reference/elements/bokeh/Tiles.html (case insensitive)
+                                                    for the main (last value) and linked (first value) panels
+    num_samples_threshold (Optional[float]): filter out data with num_samples<num_samples_threshold
+    pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
+    add_standalone_imagery (bool): if True, add a panel with only the imagery
+    ncols (int): number of columns the panels will be arranged in
+    option (Optional[str]): numpy operation to apply on the first variable
+    option_axis_dim (str): dimension name along which the option will be applied
+    """
+    out_file = set_outfile(in_path, out_path)
+
+    lon, lat, var_list, title_list = read_variables(
+        in_path,
+        variables,
+        lon_var=lon_var,
+        lat_var=lat_var,
+        num_samples_threshold=num_samples_threshold,
+        option=option,
+        option_axis_dim=option_axis_dim,
     )
 
-    save_static_plot_with_widgets(out_file, plot, alpha=alpha, cmap=cmap)
+    if title:
+        title_list[0] = title
+
+    background_tile_list = set_background_tile_list(background_tile_name_list)
+
+    # when making multiple subplots, don't add the Imagery panel
+    single_panel = len(variables) > 1 or single_panel
+
+    if len(variables) > 1 and (width == 850 or height == 750):
+        print(
+            "The default width and height (850x750) is too large for multiple panels, reducing to 550x450"
+        )
+        width = 550
+        height = 450
+
+    clim_list = [None for i in var_list]
+    clim_list[0] = clim
+    for i, var in enumerate(variables):
+        if i > 0 and "delta_pressure" in var:
+            clim_list[i] = (-20, 20)
+
+    plot_list = [
+        show_map(
+            lon,
+            lat,
+            var,
+            title=title_list[i],
+            cmap=cmap,
+            clim=clim_list[i],
+            width=width,
+            height=height,
+            alpha=alpha,
+            single_panel=single_panel,
+            background_tile_list=background_tile_list,
+            pixel_ratio=pixel_ratio,
+        )
+        for i, var in enumerate(var_list)
+    ]
+    if add_standalone_imagery and len(variables) > 1:
+        plot_list[-1] = show_map(
+            lon,
+            lat,
+            var_list[-1],
+            title=title_list[-1],
+            clim=clim_list[-1],
+            cmap=cmap,
+            width=width,
+            height=height,
+            alpha=alpha,
+            background_tile_list=background_tile_list,
+            pixel_ratio=pixel_ratio,
+        )
+
+    if len(variables) > 1:
+        plot = hv.Layout(plot_list).cols(ncols)
+    else:
+        plot = plot_list[0]
+
+    save_static_plot_with_widgets(
+        out_file,
+        plot,
+        alpha=alpha,
+        cmap=cmap,
+        layout_title=layout_title,
+        layout_details=layout_details,
+        browser_tab_title=browser_tab_title,
+    )
 
     if panel_serve:
         pn.serve(pn.Column(plot))
@@ -383,7 +608,7 @@ def L3_mosaics_to_html(
                     f"{title_prefix}; {' '.join(target.split('_')[1:])}; {resolution}; XCH4 (ppb)"
                 )
 
-                do_single_map(
+                do_html_plot(
                     mosaic_file_path,
                     var,
                     lon_var=lon_var,
@@ -447,6 +672,21 @@ def create_plot_parser(**kwargs):
         help="Will be added to the plot titles",
     )
     plot_parser.add_argument(
+        "--layout-title",
+        default="",
+        help="title text to be displayed above all the plots",
+    )
+    plot_parser.add_argument(
+        "--layout-details",
+        default="",
+        help="normal text to be displayed above all the plots (and under layout_title)",
+    )
+    plot_parser.add_argument(
+        "--tab-title",
+        default="MethaneAIR map",
+        help="text in the browser tab",
+    )
+    plot_parser.add_argument(
         "-i",
         "--index",
         action="store_true",
@@ -492,6 +732,7 @@ def create_plot_parser(**kwargs):
     plot_parser.add_argument(
         "-v",
         "--variable",
+        nargs="+",
         default="xch4",
         help="name of the variable to plot from the L3 files",
     )
@@ -526,6 +767,35 @@ def create_plot_parser(**kwargs):
         default=1,
         type=int,
         help="Resolution of the static plots (or initial image with --serve) will be (width*height)*pixel_ratio",
+    )
+    plot_parser.add_argument(
+        "--add-standalone-imagery",
+        action="store_true",
+        help="if given with multiple variables, add a panel with only the backrgound tile",
+    )
+    plot_parser.add_argument(
+        "--ncols",
+        type=int,
+        default=3,
+        help="Number of columns the panels will be arranged in when using multiple variables",
+    )
+    plot_parser.add_argument(
+        "--add-context",
+        default="",
+        choices=["l1", "l2", "l2pp", "l3"],
+        help="add some default variables to the --variables",
+    )
+    plot_parser.add_argument(
+        "--option",
+        type=str,
+        default=None,
+        help="one of numpy operations to apply on the first --variable (e.g. nanmean)",
+    )
+    plot_parser.add_argument(
+        "--option-axis-dim",
+        type=str,
+        default="spectral_channel",
+        help="dimension name along which --option will be applied",
     )
     return plot_parser
 
@@ -585,6 +855,11 @@ def main():
     else:
         clim = args.clim_bounds
 
+    if args.add_context:
+        args.variable += [
+            i for i in CONTEXT_VARIABLES_DICT[args.add_context] if i not in args.variable
+        ]
+
     if args.in_path.endswith(".csv"):
         mair_ls_arglist = inspect.getfullargspec(mair_ls).args
         mair_ls_args = {k: v for k, v in vars(args).items() if k in mair_ls_arglist}
@@ -596,10 +871,10 @@ def main():
         check = input(f"Will generate {len(uri_list)} maps, continue? (Y/N)\n")
         if check.lower() not in ["y", "yes"]:
             return
-        if "xch4" in args.variable.lower():
+        if any(["xch4" in i.lower() for i in args.variable]):
             label = "XCH4 (ppb)"
         else:
-            label = args.variable
+            label = args.variable[0]
         if not os.path.exists(args.out_path):
             os.makedirs(args.out_path)
         for i, row in df.iterrows():
@@ -616,7 +891,7 @@ def main():
                     f'{row["flight_name"]}_{row["production_operation"]}_{row["aggregation"]}.html',
                 )
             print(row["uri"])
-            do_single_map(
+            do_html_plot(
                 row["uri"],
                 args.variable,
                 lon_var=args.lon_var,
@@ -633,11 +908,18 @@ def main():
                 background_tile_name_list=args.background_tile,
                 num_samples_threshold=args.filter_num_samples,
                 pixel_ratio=args.pixel_ratio,
+                add_standalone_imagery=args.add_standalone_imagery,
+                ncols=args.ncols,
+                layout_title=args.layout_title,
+                layout_details=args.layout_details,
+                browser_tab_title=args.tab_title,
+                option=args.option,
+                option_axis_dim=args.option_axis_dim,
             )
 
     elif os.path.splitext(args.in_path)[1] != "" or args.use_get_msat:
         # If in_path point directly to a L3 mosaic file
-        do_single_map(
+        do_html_plot(
             args.in_path,
             args.variable,
             lon_var=args.lon_var,
@@ -654,6 +936,13 @@ def main():
             background_tile_name_list=args.background_tile,
             num_samples_threshold=args.filter_num_samples,
             pixel_ratio=args.pixel_ratio,
+            add_standalone_imagery=args.add_standalone_imagery,
+            ncols=args.ncols,
+            layout_title=args.layout_title,
+            layout_details=args.layout_details,
+            browser_tab_title=args.tab_title,
+            option=args.option,
+            option_axis_dim=args.option_axis_dim,
         )
     else:
         # If in_path points to a directory structured as expected by L3_mosaics_to_html
@@ -675,6 +964,8 @@ def main():
             background_tile_name_list=args.background_tile,
             num_samples_threshold=args.filter_num_samples,
             pixel_ratio=args.pixel_ratio,
+            add_standalone_imagery=args.add_standalone_imagery,
+            ncols=args.ncols,
         )
 
 

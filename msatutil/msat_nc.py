@@ -71,6 +71,8 @@ class msat_nc:
             "lev": "lev",
             "level": "lev",
             "levels": "lev",
+            "ch4band_levels": "ch4_lev",
+            "o2band_levels": "o2_lev",
             "z": "lev",
             "lmx_e": "lev_edge",
             "lev_edge": "lev_edge",
@@ -419,7 +421,7 @@ class msat_nc:
 
         varpath (Optional[str]): full variable path. If given, use it to get the valid slice
         """
-        if self.is_l2_met or self.is_l3 or self.is_labels:
+        if self.is_l3 or self.is_labels:
             return slice(None)
 
         is_msat = self.dim_size_map["xtrack"] == 2048
@@ -428,7 +430,7 @@ class msat_nc:
             longitude_varpath = "geolocation/longitude"
         elif self.is_l2:
             longitude_varpath = "Level1/Longitude"
-        elif self.is_l1:
+        elif self.is_l1 or self.is_l2_met:
             longitude_varpath = "Geolocation/Longitude"
 
         if varpath is not None:

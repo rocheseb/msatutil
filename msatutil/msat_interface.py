@@ -314,6 +314,8 @@ class msat_collection:
             "xtrack_edge",
             "atrack_edge",
             "lev",
+            "ch4_lev",
+            "o2_lev",
             "lev_edge",
             "corner",
             "spectral_channel",
