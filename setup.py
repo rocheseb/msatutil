@@ -81,6 +81,7 @@ setup(
         "console_scripts": [
             "mairhtml=msatutil.mair_geoviews:main",
             "mairls=msatutil.mair_ls:main",
+            "msattargets=msatutil.msat_targets:main",
         ],
     },
 )
