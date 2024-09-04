@@ -40,6 +40,7 @@ extras = {
         "holoviews",
         "cartopy",
         "geoviews",
+        "geopandas",
         "datashader",
     ],
     "gcsfs": [
