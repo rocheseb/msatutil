@@ -298,6 +298,7 @@ def read_variables(
     num_samples_threshold: Optional[float] = None,
     option: Optional[str] = None,
     option_axis_dim: str = "spectral_channel",
+    apply_flag: Optional[str] = None,
 ):
     var_list = []
     if in_path.endswith(".nc"):
@@ -311,6 +312,9 @@ def read_variables(
                     v[num_samples < num_samples_threshold] = np.nan
                 if i == 0 and option is not None:
                     v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
+                if i == 0 and apply_flag:
+                    flags = nc[apply_flag][:]
+                    v[apply_flag != 0] = np.nan
                 var_list += [v]
             title_list = [
                 f"{var} ({nc[var].units})" if hasattr(nc[var], "units") else var
@@ -334,6 +338,9 @@ def read_variables(
                     option_axis_dim=option_axis_dim,
                 ).compute()
             ]
+            if apply_flag:
+                flags = msat_data.pmesh_prep(apply_flag, use_valid_xtrack=True).compute()
+                var_list[0][flags != 0] = np.nan
             # read the rest of the variables if they exist
             if len(variables) > 1:
                 var_list += [
@@ -405,6 +412,7 @@ def do_html_plot(
     ncols: int = 3,
     option: Optional[str] = None,
     option_axis_dim: str = "spectral_channel",
+    apply_flag: Optional[str] = None,
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -444,6 +452,7 @@ def do_html_plot(
         num_samples_threshold=num_samples_threshold,
         option=option,
         option_axis_dim=option_axis_dim,
+        apply_flag=apply_flag,
     )
 
     if title:
@@ -808,6 +817,12 @@ def create_plot_parser(**kwargs):
         default="spectral_channel",
         help="dimension name along which --option will be applied",
     )
+    plot_parser.add_argument(
+        "--apply-flag",
+        type=str,
+        default=None,
+        help="use this flag to filter out the main data",
+    )
     return plot_parser
 
 
@@ -926,6 +941,7 @@ def main():
                 browser_tab_title=args.tab_title,
                 option=args.option,
                 option_axis_dim=args.option_axis_dim,
+                apply_flag=args.apply_flag,
             )
 
     elif os.path.splitext(args.in_path)[1] != "" or args.use_get_msat:
@@ -954,6 +970,7 @@ def main():
             browser_tab_title=args.tab_title,
             option=args.option,
             option_axis_dim=args.option_axis_dim,
+            apply_flag=args.apply_flag,
         )
     else:
         # If in_path points to a directory structured as expected by L3_mosaics_to_html
