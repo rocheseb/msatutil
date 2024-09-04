@@ -1075,15 +1075,37 @@ class msat_collection:
         else:
             vmin, vmax = vminmax
 
+        if self.use_dask:
+            x = x.compute()
+
         if latlon or gridded:
-            m = ax.pcolormesh(
-                lon,
-                lat,
-                x,
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-            )
+            if self.use_dask:
+                lon = lon.compute()
+                lat = lat.compute()
+            try:
+                m = ax.pcolormesh(
+                    lon,
+                    lat,
+                    x,
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+            except Exception:
+                levels = np.linspace(vmin, vmax, 100) if vminmax else 100
+                m = ax.contourf(
+                    lon,
+                    lat,
+                    x,
+                    levels,
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
+                    extend="both",
+                )
+                ax.set_ylim(np.nanmin(lat), np.nanmax(lat))
+                ax.set_xlim(np.nanmin(lon), np.nanmax(lon))
+                fig.suptitle("Using contourf", color="red")
         else:
             m = ax.pcolormesh(x, cmap=cmap, vmin=vmin, vmax=vmax)
         m.cmap.set_over(over)
