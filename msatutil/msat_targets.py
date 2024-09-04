@@ -20,10 +20,9 @@ def make_msat_targets_map(infile: str, outfile: str, title: str = "MethaneSAT ta
 
     gdf = gpd.read_file(infile)
 
-    gdf["default_color"] = ["green"] * len(gdf)
-    gdf["default_color"].loc[gdf["type"] == "Oil And Gas"] = "purple"
-    gdf["default_color"].loc[gdf["type"] == "Agriculture"] = "green"
-    gdf["default_color"].loc[gdf["type"] == "CalVal"] = "yellow"
+    gdf.loc[gdf["type"] == "Oil And Gas", "default_color"] = "purple"
+    gdf.loc[gdf["type"] == "Agriculture", "default_color"] = "green"
+    gdf.loc[gdf["type"] == "CalVal", "default_color"] = "yellow"
 
     gdf["color"] = gdf["default_color"].copy()
 
@@ -31,7 +30,7 @@ def make_msat_targets_map(infile: str, outfile: str, title: str = "MethaneSAT ta
     polygons = gv.Polygons(gdf, vdims=["id", "name", "type", "color", "default_color"])
     plot = base_map * polygons.opts(
         hv.opts.Polygons(
-            tools="hover",
+            tools=["hover"],
             active_tools=["pan", "wheel_zoom"],
             color="color",
             alpha=0.7,
