@@ -19,6 +19,7 @@ import geoviews as gv
 from geoviews.tile_sources import EsriImagery
 from geoviews.element import WMTS
 import panel as pn
+from pyproj import Transformer
 
 from msatutil.msat_dset import msat_dset, gs_list
 from msatutil.mair_ls import mair_ls
@@ -66,6 +67,41 @@ CONTEXT_VARIABLES_DICT = {
 }
 
 
+def get_pixel_dims(
+    bbox: tuple[float, float, float, float], width_resolution: float, height_resolution: float
+):
+    """
+    Convert a desired pixel resolution in meters to a number of pixels for the Geoviews raster.
+    The raster will then have the given resolution but with vertical pixels.
+    So here width_resolution and height_resolution are really longitude_resolution and
+    latitude_resolution (in meters).
+
+    Inputs:
+        bbox (tuple[float, float, float, float]): [minlon,minlat,maxlon,maxlat]
+        width_resolution (float): desired pixel width (meters)
+        height_resolution (float): desired pixel height (meters)
+
+    Outputs:
+        width_pixels (int): number of pixels for the plot width
+        height_pixels (int): number of pixels for the plot height
+    """
+
+    # Define the CRS for transformation
+    crs_latlon = "EPSG:4326"
+    crs_utm = "EPSG:3857"  # UTM projection
+
+    # Transform bounding box to meters
+    transformer = Transformer.from_crs(crs_latlon, crs_utm, always_xy=True)
+    min_x, min_y = transformer.transform(bbox[0], bbox[1])
+    max_x, max_y = transformer.transform(bbox[2], bbox[3])
+
+    # Calculate the number of pixels required for desired resolution
+    width_pixels = int((max_x - min_x) / width_resolution)
+    height_pixels = int((max_y - min_y) / height_resolution)
+
+    return width_pixels, height_pixels
+
+
 def show_map(
     x,
     y,
@@ -79,7 +115,8 @@ def show_map(
     background_tile_list=[EsriImagery],
     single_panel: bool = False,
     pixel_ratio: int = 1,
-    active_tools=["pan", "wheel_zoom"],
+    active_tools: list[str] = ["pan", "wheel_zoom"],
+    pixel_resolution: Optional[tuple[float, float]] = None,
 ):
     """
     Make a geoviews map of z overlayed on background_tile
@@ -100,6 +137,7 @@ def show_map(
         single_panel (bool): if True, do not add the linked panel with only esri imagery
         pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
         active_tools (list[str]): Active map tools for mouse use (default: ['pan', 'wheel_zoom'])
+        pixel_resolution (Optional[tuple[float,float]]): desired pixel (width,height) in meters
 
     Outputs:
         geoviews figure
@@ -113,7 +151,20 @@ def show_map(
         std_z = np.nanstd(z, ddof=1)
         clim = (mean_z - 3 * std_z, mean_z + 3 * std_z)
 
-    raster = rasterize(quad, width=width, height=height, pixel_ratio=pixel_ratio).opts(
+    if pixel_resolution is not None:
+        width_pixels, height_pixels = get_pixel_dims(
+            [np.nanmin(x), np.nanmin(y), np.nanmax(x), np.nanmax(y)],
+            pixel_resolution[0],
+            pixel_resolution[1],
+        )
+        pixel_ratio = 1
+    else:
+        width_pixels = width
+        height_pixels = height
+
+    raster = rasterize(
+        quad, width=width_pixels, height=height_pixels, pixel_ratio=pixel_ratio
+    ).opts(
         width=width,
         height=height,
         cmap=cmap,
@@ -413,6 +464,7 @@ def do_html_plot(
     option: Optional[str] = None,
     option_axis_dim: str = "spectral_channel",
     apply_flag: Optional[str] = None,
+    pixel_resolution: Optional[tuple[float, float]] = None,
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -441,6 +493,8 @@ def do_html_plot(
     ncols (int): number of columns the panels will be arranged in
     option (Optional[str]): numpy operation to apply on the first variable
     option_axis_dim (str): dimension name along which the option will be applied
+    apply_flag (Optional[str]): if given, use this flag variable to nan out the data
+    pixel_resolution (Optional[tuple[float, float]]): pixel (width,height) in meters
     """
     out_file = set_outfile(in_path, out_path)
 
@@ -490,6 +544,7 @@ def do_html_plot(
             single_panel=single_panel,
             background_tile_list=background_tile_list,
             pixel_ratio=pixel_ratio,
+            pixel_resolution=pixel_resolution,
         )
         for i, var in enumerate(var_list)
     ]
@@ -506,6 +561,7 @@ def do_html_plot(
             alpha=alpha,
             background_tile_list=background_tile_list,
             pixel_ratio=pixel_ratio,
+            pixel_resolution=pixel_resolution,
         )
 
     if len(variables) > 1:
@@ -545,6 +601,7 @@ def L3_mosaics_to_html(
     background_tile_name_list: Optional[List[str]] = None,
     num_samples_threshold: Optional[float] = None,
     pixel_ratio: int = 1,
+    pixel_resolution: Optional[tuple[float, float]] = None,
 ) -> None:
     """
     l3_dir: full path to the L3 directory, assumes the following directory structure
@@ -573,6 +630,7 @@ def L3_mosaics_to_html(
                                                     for the main (last value) and linked (first value) panels
     num_samples_threshold (Optional[float]): filter out data with num_samples<num_samples_threshold
     pixel_ratio (int): the static maps will have width x height pixels, this multiplies the number of pixels
+    pixel_resolution (Optional[tuple[float, float]]): pixel (width,height) in meters. Overrides pixel_ratio.
     """
     l3_on_gs = l3_dir.startswith("gs://")
     if l3_on_gs:
@@ -644,6 +702,7 @@ def L3_mosaics_to_html(
                     background_tile_name_list=background_tile_name_list,
                     num_samples_threshold=num_samples_threshold,
                     pixel_ratio=pixel_ratio,
+                    pixel_resolution=pixel_resolution,
                 )
 
     if html_index:
@@ -823,6 +882,13 @@ def create_plot_parser(**kwargs):
         default=None,
         help="use this flag to filter out the main data",
     )
+    plot_parser.add_argument(
+        "--pixel-resolution",
+        nargs=2,
+        type=float,
+        default=None,
+        help="[pixel_width,pixel_height] in meters. Overrides --pixel-ratio.",
+    )
     return plot_parser
 
 
@@ -942,6 +1008,7 @@ def main():
                 option=args.option,
                 option_axis_dim=args.option_axis_dim,
                 apply_flag=args.apply_flag,
+                pixel_resolution=args.pixel_resolution,
             )
 
     elif os.path.splitext(args.in_path)[1] != "" or args.use_get_msat:
@@ -971,6 +1038,7 @@ def main():
             option=args.option,
             option_axis_dim=args.option_axis_dim,
             apply_flag=args.apply_flag,
+            pixel_resolution=args.pixel_resolution,
         )
     else:
         # If in_path points to a directory structured as expected by L3_mosaics_to_html
@@ -994,6 +1062,7 @@ def main():
             pixel_ratio=args.pixel_ratio,
             add_standalone_imagery=args.add_standalone_imagery,
             ncols=args.ncols,
+            pixel_resolution=args.pixel_resolution,
         )
 
 
