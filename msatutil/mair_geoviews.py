@@ -87,8 +87,9 @@ def get_pixel_dims(
     """
 
     # Define the CRS for transformation
-    crs_latlon = "EPSG:4326"
-    crs_utm = "EPSG:3857"  # UTM projection
+    crs_latlon = "EPSG:4326"  # WGS 84 -- WGS84 - World Geodetic System 1984; unit = degrees
+    crs_utm = "EPSG:3857"  # WGS 84 / Pseudo-Mercator -- Spherical Mercator; unit = meters
+    # crs_utm is for Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI
 
     # Transform bounding box to meters
     transformer = Transformer.from_crs(crs_latlon, crs_utm, always_xy=True)
