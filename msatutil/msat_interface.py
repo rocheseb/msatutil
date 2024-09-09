@@ -23,6 +23,7 @@ import pickle
 from tqdm import tqdm
 from msatutil.make_hist import make_hist
 from msatutil.msat_dset import gs_list
+import warnings
 
 
 @dask.delayed
@@ -134,7 +135,12 @@ def get_msat(
         flist = gs_list(indir, srchstr=srchstr)
     else:
         flist = glob.glob(os.path.join(indir, srchstr))
-    return msat_collection(flist, date_range=date_range, date_pattern=date_pattern, use_dask=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = msat_collection(
+            flist, date_range=date_range, date_pattern=date_pattern, use_dask=True
+        )
+    return result
 
 
 class msat_file(msat_nc):
