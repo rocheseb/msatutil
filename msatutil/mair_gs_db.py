@@ -155,20 +155,22 @@ def parse_l2_or_l3_file_path(path: str, timestamp: str) -> Optional[dict[str, st
     """
     Used to parse both L2 and L3 file paths
     """
+    is_msat = "data-methanesat" in path
     path = path.strip()
+    gs_path = path.startswith("gs://")
+    if gs_path:
+        path = path[5:]
+    spath = path.split("/")[1:]
+
     if (
         (not path.endswith(".nc"))
         or ("subgranule-retrievals" in path)
         or ("qaqc" in path)
         or ("bias-model" in path)
         or ("moved_files" in path)
+        or (is_msat and not spath[0].isdigit())
     ):
         return None
-
-    gs_path = path.startswith("gs://")
-    if gs_path:
-        path = path[5:]
-    spath = path.split("/")[1:]
 
     columns = [
         "campaign",
@@ -180,13 +182,15 @@ def parse_l2_or_l3_file_path(path: str, timestamp: str) -> Optional[dict[str, st
         "collection",
         "aggregation",
     ]
+    if is_msat:
+        columns = columns[:-2]
 
     if "granule-retrievals" in path:
         columns += ["type", "molecule"]
-    elif "post-processed/level2-results" in path:
-        columns += ["type", "post_product"]
-    elif "post-processed/interpolated_granule_retrievals" in path:
-        columns += ["type", "post_product", "molecule"]
+    elif "level2-results" in path:
+        columns += ["type"] if is_msat else ["type", "post_product"]
+    elif "interpolated_granule_retrievals" in path:
+        columns += ["type", "molecule"] if is_msat else ["type", "post_product", "molecule"]
     elif "level2-apriori" in path:
         columns += ["type"]
     elif "level1b" in path:
@@ -351,7 +355,10 @@ def main():
     )
     args = parser.parse_args()
 
-    gs_command = f"gsutil -m ls -l gs://{args.gs_bucket_name}/MAIR*/**"
+    if "data-methanesat" in args.gs_bucket_name:
+        gs_command = f"gsutil -m ls -l gs://{args.gs_bucket_name}/**"
+    else:
+        gs_command = f"gsutil -m ls -l gs://{args.gs_bucket_name}/MAIR*/**"
     grep_command = 'grep "\.nc$"'
     gs_data_file = f"{os.path.join(os.path.dirname(args.outfile),args.gs_bucket_name)}.txt"
 
@@ -367,7 +374,7 @@ def main():
     mair_gs_db(file_list, timestamp_list, args.outfile, level=args.level)
 
     if args.out_gs is not None:
-        subprocess.run(f"gsutil cp {args.outfile} {args.out_gs}",shell=True)
+        subprocess.run(f"gsutil cp {args.outfile} {args.out_gs}", shell=True)
 
 
 if __name__ == "__main__":
