@@ -583,6 +583,8 @@ def do_html_plot(
     if panel_serve:
         pn.serve(pn.Column(plot))
 
+    return plot
+
 
 def L3_mosaics_to_html(
     l3_dir: str,
@@ -687,7 +689,7 @@ def L3_mosaics_to_html(
                     f"{title_prefix}; {' '.join(target.split('_')[1:])}; {resolution}; XCH4 (ppb)"
                 )
 
-                do_html_plot(
+                _ = do_html_plot(
                     mosaic_file_path,
                     var,
                     lon_var=lon_var,
@@ -984,7 +986,7 @@ def main():
                     f'{row["flight_name"]}_{row["production_operation"]}_{row["aggregation"]}.html',
                 )
             print(row["uri"])
-            do_html_plot(
+            _ = do_html_plot(
                 row["uri"],
                 args.variable,
                 lon_var=args.lon_var,
@@ -1014,7 +1016,7 @@ def main():
 
     elif os.path.splitext(args.in_path)[1] != "" or args.use_get_msat:
         # If in_path point directly to a L3 mosaic file
-        do_html_plot(
+        _ = do_html_plot(
             args.in_path,
             args.variable,
             lon_var=args.lon_var,
