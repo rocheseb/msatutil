@@ -88,14 +88,11 @@ def get_pixel_dims(
     """
 
     # Define the CRS for transformation
-    crs_latlon = "EPSG:4326"  # WGS 84 -- WGS84 - World Geodetic System 1984; unit = degrees
-    crs_utm = "EPSG:3857"  # WGS 84 / Pseudo-Mercator -- Spherical Mercator; unit = meters
-    # crs_utm is for Google Maps, OpenStreetMap, Bing, ArcGIS, ESRI
+    wgs84_to_mercator = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
 
     # Transform bounding box to meters
-    transformer = Transformer.from_crs(crs_latlon, crs_utm, always_xy=True)
-    min_x, min_y = transformer.transform(bbox[0], bbox[1])
-    max_x, max_y = transformer.transform(bbox[2], bbox[3])
+    min_x, min_y = wgs84_to_mercator.transform(bbox[0], bbox[1])
+    max_x, max_y = wgs84_to_mercator.transform(bbox[2], bbox[3])
 
     # Calculate the number of pixels required for desired resolution
     width_pixels = int((max_x - min_x) / width_resolution)
