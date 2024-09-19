@@ -254,31 +254,33 @@ class msat_nc:
 
         return sv_slice
 
-    def search(self, key: str) -> None:
+    def search(self, key: str, start=None) -> None:
         """
         print out groups and variables that include the key (all lowercase checks)
         key: the string you would like to search for (included in groups or variables)
         """
         key = key.lower()
-        if self.nc_dset.variables:
-            for var in self.nc_dset.variables:
-                if key in var.lower():
-                    print(f"VAR: {var} {self.nc_dset[var].dimensions}")
-        if self.nc_dset.groups:
-            for grp in self.nc_dset.groups:
-                if key in grp.lower():
-                    print(f"GROUP: {grp}")
-                for var in self.nc_dset[grp].variables:
-                    if key in var.lower():
-                        print(f"GROUP: {grp}\tVAR: {var} {self.nc_dset[grp][var].dimensions}")
-                    if var == "APosterioriState":
-                        sv_dict = self.nc_dset["SpecFitDiagnostics/APosterioriState"].__dict__
-                        for sv_key, val in sv_dict.items():
-                            if sv_key.startswith("SubStateName") and key in val.strip().lower():
-                                sv_slice = self.get_sv_slice(val.strip())
-                                print(
-                                    f"GROUP: {grp}\tVAR: {var} {self.nc_dset[grp][var].dimensions} \tSV_VAR: {val.strip()} \tSV_SLICE: {list(range(sv_slice.start,sv_slice.stop))}"
-                                )
+
+        if start is None:
+            start = self.nc_dset
+
+        for var in start.variables:
+            varpath = _get_full_variable_path(start[var])
+            if key in var.lower():
+                print(f"{varpath} {start[var].dimensions}")
+            if var in ["APosterioriState", "APrioriState"]:
+                sv_dict = start[var].__dict__
+                for sv_key, val in sv_dict.items():
+                    if sv_key.startswith("SubStateName") and key in val.strip().lower():
+                        sv_slice = self.get_sv_slice(val.strip())
+                        print(
+                            f"{varpath} {start[var].dimensions} \tSV_VAR: {val.strip()} \tSV_SLICE: {list(range(sv_slice.start,sv_slice.stop))}"
+                        )
+
+        for grp in start.groups:
+            if key in grp.lower():
+                print(f"GROUP: {grp}")
+            self.search(key, start=start[grp])
 
     def fetch(
         self, key: str, chunks: Union[str, Tuple] = "auto"
@@ -516,3 +518,20 @@ class msat_nc:
         """
         varpath_list = self.get_var_paths()
         return var in varpath_list
+
+
+def _get_full_variable_path(var: ncdf.Variable) -> str:
+    """
+    Get the full variable path for a given variable
+
+    var (Variable): netCDF4 variable object
+    """
+    parts = []
+    group = var.group()
+    while group.name != "/":
+        parts.append(group.name)
+        group = group.parent
+    parts.reverse()
+    parts.append(var.name)
+
+    return "/".join(parts)
