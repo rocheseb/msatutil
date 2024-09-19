@@ -206,18 +206,20 @@ class msat_nc:
         else:
             print(self.nc_dset[var])
 
-    def show_all(self) -> None:
+    def show_all(self, start=None, indent="") -> None:
         """
         Show all the groups names, variable names, and variable dimensions
         """
-        if self.nc_dset.groups:
-            for grp in self.nc_dset.groups:
-                print(grp)
-                for var in self.nc_dset[grp].variables:
-                    print("\t", var, self.nc_dset[grp][var].dimensions)
-        if self.nc_dset.variables:
-            for var in self.nc_dset.variables:
-                print(var, self.nc_dset[var].dimensions)
+        if start is None:
+            start = self.nc_dset
+
+        for var in start.variables:
+            print(indent, var, start[var].dimensions)
+
+        if start.groups:
+            for grp in start.groups:
+                print(indent, "Group:", grp)
+                self.show_all(start=start[grp], indent=indent + "\t")
 
     def show_group(self, grp: str) -> None:
         """
