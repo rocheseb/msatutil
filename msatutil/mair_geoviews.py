@@ -41,6 +41,7 @@ CONTEXT_L1_VARIABLES = [
 CONTEXT_L2_VARIABLES = [
     "Level1/SurfaceAltitude",
     "Level1/ViewingZenithAngle",
+    "OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr",
 ]
 
 CONTEXT_L2PP_VARIABLES = [
