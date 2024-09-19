@@ -195,16 +195,12 @@ class msat_nc:
 
         return units
 
-    def show_var(self, var: str, grp: Optional[str] = None) -> None:
+    def show_var(self, varpath: str) -> None:
         """
         display the given variable metadata
-        var: complete variable name
-        grp: complete group name
+        varpath: complete variable path
         """
-        if grp:
-            print(self.nc_dset[grp][var])
-        else:
-            print(self.nc_dset[var])
+        print(self.nc_dset[varpath])
 
     def show_all(self, start=None, indent="") -> None:
         """
@@ -221,14 +217,12 @@ class msat_nc:
                 print(indent, "Group:", grp)
                 self.show_all(start=start[grp], indent=indent + "\t")
 
-    def show_group(self, grp: str) -> None:
+    def show_group(self, grp: str, start=None) -> None:
         """
         Show all the variable names and dimensions of a given group
         grp: complete group name
         """
-        if self.nc_dset.groups:
-            for var in self.nc_dset[grp].variables:
-                print(var, self.nc_dset[grp][var].dimensions)
+        self.show_all(start=self.nc_dset[grp])
 
     def show_sv(self) -> None:
         """

@@ -1212,6 +1212,13 @@ class msat_collection:
         """
         self.msat_files[self.ids[0]].show_group(grp)
 
+    def show_var(self, varpath: str) -> None:
+        """
+        show the given variable metadata
+        varpath (str): full path to the variable
+        """
+        self.msat_files[self.ids[0]].show_var(varpath)
+
     def get_sv_slice(self, var: str) -> np.ndarray:
         """
         Get the state vector index for the given variable
