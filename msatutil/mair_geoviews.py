@@ -560,12 +560,12 @@ def do_html_plot(
         for i, var in enumerate(var_list)
     ]
     if add_standalone_imagery and len(variables) > 1:
-        plot_list[-1] = show_map(
+        plot_list[0] = show_map(
             lon,
             lat,
-            var_list[-1],
-            title=title_list[-1],
-            clim=clim_list[-1],
+            var_list[0],
+            title=title_list[0],
+            clim=clim_list[0],
             cmap=cmap,
             width=width,
             height=height,
