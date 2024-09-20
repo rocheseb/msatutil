@@ -116,6 +116,7 @@ def show_map(
     pixel_ratio: int = 1,
     active_tools: list[str] = ["pan", "wheel_zoom"],
     pixel_resolution: Optional[tuple[float, float]] = None,
+    clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
 ):
     """
     Make a geoviews map of z overlayed on background_tile
@@ -137,6 +138,10 @@ def show_map(
         pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
         active_tools (list[str]): Active map tools for mouse use (default: ['pan', 'wheel_zoom'])
         pixel_resolution (Optional[tuple[float,float]]): desired pixel (width,height) in meters
+        clipping_colors (dict): dictionary for the holoviews colorbar options, (0,0,0,0) is transparent.
+            min and max are for below and above the minimum and maximum colorbar limits.
+            can use named colors or rgba 4-tuple.
+            however there is no nice way to indicate the clipping colors with bokeh, they won't show on the colorbar.
 
     Outputs:
         geoviews figure
@@ -171,6 +176,7 @@ def show_map(
         title=title,
         alpha=alpha,
         active_tools=active_tools,
+        clipping_colors=clipping_colors,
     )
 
     if clim is not False:
@@ -357,7 +363,7 @@ def read_variables(
             lat = nc[lat_var][:]
             for i, var in enumerate(variables):
                 v = nc[var][:]
-                if num_samples_threshold is not None:
+                if num_samples_threshold is not None and var != "num_samples":
                     num_samples = nc["num_samples"][:]
                     v[num_samples < num_samples_threshold] = np.nan
                 if i == 0 and option is not None:
@@ -464,6 +470,7 @@ def do_html_plot(
     option_axis_dim: str = "spectral_channel",
     apply_flag: Optional[str] = None,
     pixel_resolution: Optional[tuple[float, float]] = None,
+    clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -494,6 +501,10 @@ def do_html_plot(
     option_axis_dim (str): dimension name along which the option will be applied
     apply_flag (Optional[str]): if given, use this flag variable to nan out the data
     pixel_resolution (Optional[tuple[float, float]]): pixel (width,height) in meters
+    clipping_colors (dict): dictionary for the holoviews colorbar options, (0,0,0,0) is transparent.
+        min and max are for below and above the minimum and maximum colorbar limits.
+        can use named colors or rgba 4-tuple.
+        however there is no nice way to indicate the clipping colors with bokeh, they won't show on the colorbar.
     """
     out_file = set_outfile(in_path, out_path)
 
@@ -544,6 +555,7 @@ def do_html_plot(
             background_tile_list=background_tile_list,
             pixel_ratio=pixel_ratio,
             pixel_resolution=pixel_resolution,
+            clipping_colors=clipping_colors,
         )
         for i, var in enumerate(var_list)
     ]
