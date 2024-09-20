@@ -93,9 +93,9 @@ e.g. from the parent directory of the cloned msatutil repo:
 
 `panel serve --show msatutil/notebooks/mair_geoviews.ipynb`
 
-Or using the **mairl3html** console script with a direct file path and the **--serve** argument:
+Or using the **mairhtml** console script with a direct file path and the **--serve** argument:
 
-`mairl3html l3_file_path out_path --serve`
+`mairhtml l3_file_path out_path --serve`
 
 #### with jupyter
 
@@ -112,17 +112,17 @@ Check detailed usage info with
 
 `mairls -h`
 
-**mairl3html** is a console entry point for generating static html plot of L3 mosaic files.
+**mairhtml** is a console entry point for generating static html plot of L3 mosaic files.
 
 It interfaces with [mair_geoviews.py](msatutil/mair_geoviews.py)
 
 Usage:
 
-`mairl3html in_path out_path`
+`mairhtml in_path out_path`
 
 Check detailed usage info with
 
-`mairl3html -h`
+`mairhtml -h`
 
 **in_path** can be the path to a directory or file, it accepts **gs://** paths
 
@@ -142,20 +142,20 @@ in_path
         └── mosaic_file.nc
 ```
 
-When **in_path** is a direct path to a file, **mairl3html** can be given the **--serve** argument to popup the plot with a local webserver (with live regridding)
+When **in_path** is a direct path to a file, **mairhtml** can be given the **--serve** argument to popup the plot with a local webserver (with live regridding)
 
-**in_path** can also be a **.csv** file with metadata on MethaneAIR files, in that case all the arguments of **mairls** can be used with **mairl3html** and the code will
+**in_path** can also be a **.csv** file with metadata on MethaneAIR files, in that case all the arguments of **mairls** can be used with **mairhtml** and the code will
 
 generate static maps for all the files matching the mairls arguments.
 
-Calling **mairl3html** with a **.csv** file and the **--show** argument won't generate plots, it is the same as calling **mairls**
+Calling **mairhtml** with a **.csv** file and the **--show** argument won't generate plots, it is the same as calling **mairls**
 
 
 #### Other
 
 [generate_html_index.sh](msatutil/generate_html_index.sh) can be used to add index.html files under a directory structure
 
-It needs **[tree](https://linux.die.net/man/1/tree)** and is called with **mairl3html** when the **-i/--index** argument is given
+It needs **[tree](https://linux.die.net/man/1/tree)** and is called with **mairhtml** when the **-i/--index** argument is given
 
 Usage:
 
