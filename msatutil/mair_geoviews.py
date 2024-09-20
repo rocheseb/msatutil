@@ -53,7 +53,7 @@ CONTEXT_L2PP_VARIABLES = [
 
 CONTEXT_L3_VARIABLES = [
     "apriori_data/albedo_ch4band",
-    "apriori_data/surface_pressure",
+    "geolocation/terrain_height",
     "o2dp_fit_diagnostics/bias_corrected_delta_pressure",
     "apriori_data/zonal_wind",
     "apriori_data/meridional_wind",
