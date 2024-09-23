@@ -542,6 +542,8 @@ def do_html_plot(
     for i, var in enumerate(variables):
         if i > 0 and "delta_pressure" in var:
             clim_list[i] = (-20, 20)
+        elif i > 0 and ("num_samples" in var or "flag" in var):
+            clim_list[i] = (np.nanmin(var_list[i]), np.nanmax(var_list[i]))
 
     plot_list = [
         show_map(
