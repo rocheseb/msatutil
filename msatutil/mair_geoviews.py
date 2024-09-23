@@ -359,13 +359,16 @@ def read_variables(
     var_list = []
     if in_path.endswith(".nc"):
         with msat_dset(in_path) as nc:
-            lon = nc[lon_var][:]
-            lat = nc[lat_var][:]
+            lon = nc[lon_var][:].data
+            lat = nc[lat_var][:].data
+            if num_samples_threshold is not None:
+                num_samples = nc["num_samples"][:].data
+                num_samples[num_samples < num_samples_threshold] = np.nan
+                nan_num_samples = np.isnan(num_samples)
             for i, var in enumerate(variables):
-                v = nc[var][:]
-                if num_samples_threshold is not None and var != "num_samples":
-                    num_samples = nc["num_samples"][:]
-                    v[num_samples < num_samples_threshold] = np.nan
+                v = nc[var][:].data
+                if num_samples_threshold is not None:
+                    v[nan_num_samples] = np.nan
                 if i == 0 and option is not None:
                     v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
                 if i == 0 and apply_flag:
