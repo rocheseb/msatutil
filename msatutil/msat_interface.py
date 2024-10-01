@@ -693,7 +693,12 @@ class msat_collection:
 
         if "/" in var:
             var_path = var
-            grp, var = var.split("/")
+            try:
+                grp, var = var.split("/")
+            except Exception:
+                v = var.split("/")
+                grp = "/".join(v[:-1])
+                var = v[-1]
         else:
             var_path = self.fetch_varpath(var, grp=grp)
         var_dim_map = self.get_dim_map(var_path)
