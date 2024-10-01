@@ -542,8 +542,10 @@ def do_html_plot(
     for i, var in enumerate(variables):
         if i > 0 and "delta_pressure" in var:
             clim_list[i] = (-20, 20)
-        elif i > 0 and ("num_samples" in var or "flag" in var):
+        elif i > 0 and any([v in var for v in ["num_samples", "flag", "albedo"]]):
             clim_list[i] = (np.nanmin(var_list[i]), np.nanmax(var_list[i]))
+        if "albedo_ch4band" in var:
+            title_list[i] = "A Priori Surface Albedo at 1606 nm"
 
     plot_list = [
         show_map(
