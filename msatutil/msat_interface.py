@@ -344,6 +344,9 @@ class msat_collection:
     def close(self) -> None:
         for f in self.msat_files.values():
             f.close()
+        for k, v in globals().items():
+            if v is self:
+                del globals()[k]
 
     def __repr__(self) -> str:
         return self.__str__()
