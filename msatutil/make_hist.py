@@ -7,8 +7,8 @@ from typing import Optional, Sequence, Annotated
 def make_hist(
     ax: plt.Axes,
     x: Sequence[float],
-    label: str,
-    color: str,
+    label: str = "",
+    color: Optional[str] = None,
     rng: Optional[Annotated[Sequence[float], 2]] = None,
     nbins: Optional[int] = None,
     exp_fmt: bool = True,
@@ -33,13 +33,13 @@ def make_hist(
     x_std = np.nanstd(x_rng, ddof=1)
     x_med = np.nanmedian(x_rng)
     if exp_fmt:
-        label = (
-            label
-        ) = f"{label}\n$\mu\pm\sigma$: {x_mean:.3e}$\pm${x_std:.3e}\nmedian: {x_med:.3e} "
+        label = label = (
+            rf"{label}\n$\mu\pm\sigma$: {x_mean:.3e}$\pm${x_std:.3e}\nmedian: {x_med:.3e} "
+        )
     else:
-        label = (
-            label
-        ) = f"{label}\n$\mu\pm\sigma$: {x_mean:.2f}$\pm${x_std:.2f}\nmedian: {x_med:.2f} "
+        label = label = (
+            rf"{label}\n$\mu\pm\sigma$: {x_mean:.2f}$\pm${x_std:.2f}\nmedian: {x_med:.2f} "
+        )
     bin_vals, bin_edges, patches = ax.hist(
         x,
         edgecolor=color,
