@@ -953,7 +953,7 @@ class msat_collection:
         cmap: str = "viridis",
         set_nan: Optional[float] = None,
         use_valid_xtrack: bool = False,
-    ) -> None:
+    ) -> np.ndarray[float]:
         """
         Make a heatmap of the given variable
         var (str): key contained in the variable to search (uses msat_nc fetch method)
@@ -981,6 +981,9 @@ class msat_collection:
         cmap (str): matplotlib named colormaps (https://matplotlib.org/stable/gallery/color/colormap_reference.html)
         set_nan (Optional[float]): this value will be replaced with nan after a pmesh_prep call
         use_valid_xtrack (bool): if True, only gets the data along the self.valid_xtrack slice
+
+        Outputs:
+            the pmesh_prep (or grid_prep if lon_lim/lat_lim are given) output for the plotted variable
         """
         if ids is None:
             ids = self.ids
@@ -1172,6 +1175,8 @@ class msat_collection:
             # also save a pickled version to be able to reopen the interactive matplotlib figure
             with open(f"{save_path}.pickle", "wb") as outfile:
                 pickle.dump(fig, outfile)
+
+        return x
 
     def search(self, key: str) -> None:
         """
