@@ -1143,11 +1143,10 @@ class msat_collection:
         if option:
             lab = f"{option} {lab}"
 
-        if len(plt.gcf().axes) == 1:
-            if vminmax is not None:
-                plt.colorbar(m, label=lab, ax=ax, extend="both")
-            else:
-                plt.colorbar(m, label=lab, ax=ax)
+        if vminmax is not None:
+            plt.colorbar(m, label=lab, ax=ax, extend="both")
+        else:
+            plt.colorbar(m, label=lab, ax=ax)
 
         if self.start_dates is not None:
             start_dates = sorted([self.start_dates[i] for i in ids])
