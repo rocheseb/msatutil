@@ -1,0 +1,1 @@
+find $1 -type d -print -exec sh -c 'tree "$0" -H "." -L 6 --noreport --dirsfirst --charset utf-8 --ignore-case -I "index.html" -P "*.html" -T "MethaneAIR L3 XCH4 maps" -o "$0/index.html"' {} \; 
