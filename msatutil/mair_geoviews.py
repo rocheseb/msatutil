@@ -126,6 +126,7 @@ def show_map(
     single_panel: bool = False,
     pixel_ratio: int = 1,
     active_tools: list[str] = ["pan", "wheel_zoom"],
+    tools: list[str] = [],
     pixel_resolution: Optional[tuple[float, float]] = None,
     clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
 ):
@@ -148,6 +149,7 @@ def show_map(
         single_panel (bool): if True, do not add the linked panel with only esri imagery
         pixel_ratio (int): the initial map (and the static maps) will have width x height pixels, this multiplies the number of pixels
         active_tools (list[str]): Active map tools for mouse use (default: ['pan', 'wheel_zoom'])
+        tools (list[str]): Additional map tools (default: [], suggested: ['hover']). An apparent bug makes hover active if specified
         pixel_resolution (Optional[tuple[float,float]]): desired pixel (width,height) in meters
         clipping_colors (dict): dictionary for the holoviews colorbar options, (0,0,0,0) is transparent.
             min and max are for below and above the minimum and maximum colorbar limits.
@@ -206,6 +208,7 @@ def show_map(
         title=title,
         alpha=alpha,
         active_tools=active_tools,
+        tools=tools,
         clipping_colors=clipping_colors,
         **scalebar_args,
     )
@@ -412,6 +415,7 @@ def read_variables(
     option: Optional[str] = None,
     option_axis_dim: str = "spectral_channel",
     apply_flag: Optional[str] = None,
+    date_range=None,
 ):
     var_list = []
     if in_path.endswith(".nc"):
@@ -428,6 +432,7 @@ def read_variables(
                     v[nan_num_samples] = np.nan
                 if i == 0 and option is not None:
                     v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
+                    assert nc[apply_flag][:].shape == v.shape, f"Flag variable {apply_flag} has shape {nc[apply_flag][:].shape}, but first variable {var} has shape {v.shape}"
                 if i == 0 and apply_flag:
                     flags = nc[apply_flag][:].astype(float).filled(np.nan)
                     v[flags != 0] = np.nan
@@ -437,7 +442,7 @@ def read_variables(
                 for var in variables
             ]
     else:
-        with get_msat(in_path) as msat_data:
+        with get_msat(in_path, date_range=date_range) as msat_data:
             # make the valid cross track check on the variable to plot
             # if it is as 3D variable make it on the longitude variable
             # sometimes longitude has 1 extra valid cross track on each side
