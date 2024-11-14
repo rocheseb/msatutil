@@ -432,8 +432,8 @@ def read_variables(
                     v[nan_num_samples] = np.nan
                 if i == 0 and option is not None:
                     v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
-                    assert nc[apply_flag][:].shape == v.shape, f"Flag variable {apply_flag} has shape {nc[apply_flag][:].shape}, but first variable {var} has shape {v.shape}"
                 if i == 0 and apply_flag:
+                    assert nc[apply_flag][:].shape == v.shape, f"Flag variable {apply_flag} has shape {nc[apply_flag][:].shape}, but first variable {var} has shape {v.shape}"
                     flags = nc[apply_flag][:].astype(float).filled(np.nan)
                     v[flags != 0] = np.nan
                 var_list += [v]
