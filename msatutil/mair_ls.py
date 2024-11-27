@@ -1,5 +1,5 @@
 import argparse
-from typing import Optional
+from typing import Optional, Any
 from msatutil.msat_dset import cloud_file
 import numpy as np
 import pandas as pd
@@ -7,8 +7,63 @@ import re
 from typing import Union
 
 
+def load_dataframe(in_path: Union[str, pd.DataFrame]) -> pd.DataFrame:
+    if isinstance(in_path, str):
+        with cloud_file(in_path) as csv_in:
+            df = pd.read_csv(csv_in)  # load from path
+    elif isinstance(in_path, pd.DataFrame):
+        df = in_path  # use pre-loaded catalogue for efficiency
+    else:
+        raise TypeError("in_path must be either a string representing a path or a pandas DataFrame")
+
+    return df
+
+
+def convert_to_datetime(df: pd.DataFrame, col: str):
+    """
+    Modifies df in place by converting df[col] to pandas timestamps
+
+    Inputs:
+        df (pd.DataFrame): input dataframe
+        col (str): column name to convert to datetime
+    """
+
+    try:
+        transformed = pd.to_datetime(df[col], errors="coerce")
+    except (ValueError, TypeError):
+        return
+
+    if set(transformed) != set([pd.NaT]):
+        df[col] = transformed
+
+
+def get_latest(df: pd.DataFrame) -> pd.DataFrame:
+
+    df_out = df.copy()
+
+    is_msat = len(df.iloc[0]["flight_name"]) == 8
+
+    if not is_msat and "production_timestamp" in df.columns:
+        sorted_production_operation = list(
+            df.sort_values(by="production_timestamp")
+            .groupby("production_operation")
+            .first()
+            .sort_values(by="production_timestamp")
+            .reset_index()["production_operation"]
+        )
+        production_operation = sorted_production_operation[-1]
+        df_out = df.loc[df["production_operation"] == production_operation]
+    elif is_msat and "production_timestamp" in df.columns:
+        df_out = (
+            df.sort_values(by="production_timestamp").groupby("flight_name").last().reset_index()
+        )
+
+    return df_out
+
+
 def mair_ls(
     in_path: Union[str, pd.DataFrame],
+    target: Optional[str] = None,
     flight_name: Optional[str] = None,
     uri: Optional[str] = None,
     aggregation: Optional[str] = None,
@@ -25,20 +80,15 @@ def mair_ls(
     latest: bool = False,
     show: bool = True,
 ):
-    if isinstance(in_path, str):
-        with cloud_file(in_path) as csv_in:
-            df = pd.read_csv(csv_in)  # load from path
-    elif isinstance(in_path, pd.DataFrame):
-        df = in_path  # use pre-loaded catalogue for efficiency
-    else:
-        raise TypeError("in_path must be either a string representing a path or a pandas DataFrame")
+    df = load_dataframe(in_path)
 
     for k in ["production_timestamp", "time_start", "time_end", "flight_date"]:
         if (k is not None) and (k in df.columns):
-            df[k] = pd.to_datetime(df[k])
+            convert_to_datetime(df, k)
 
     # string equality checks
     for k, v in {
+        "target": target,
         "flight_name": flight_name,
         "aggregation": aggregation,
         "resolution": resolution,
@@ -48,12 +98,12 @@ def mair_ls(
         "type": type,
     }.items():
         if (v is not None) and (k in df.columns):
-            df = df.loc[df[k].str.lower() == v.lower()]
+            df = df.loc[df[k].astype(str).str.lower() == v.lower()]
 
     # string contains checks
     for k, v in {"target": target_name, "uri": uri}.items():
         if (v is not None) and (k in df.columns):
-            df = df.loc[df[k].str.contains(v, na=False, case=False)]
+            df = df.loc[df[k].astype(str).str.contains(v, na=False, case=False)]
 
     # dates and timestamp filters
     if (flight_date is not None) and ("flight_date" in df.columns):
@@ -62,16 +112,8 @@ def mair_ls(
     if df.index.size == 0:
         return df.reset_index().drop(columns=["index"])
 
-    if latest and "production_timestamp" in df.columns:
-        sorted_production_operation = list(
-            df.sort_values(by="production_timestamp")
-            .groupby("production_operation")
-            .first()
-            .sort_values(by="production_timestamp")
-            .reset_index()["production_operation"]
-        )
-        production_operation = sorted_production_operation[-1]
-        df = df.loc[df["production_operation"] == production_operation]
+    if latest:
+        df = get_latest(df)
 
     if timestamp is not None:
         timestamp = pd.to_datetime(timestamp)
@@ -157,11 +199,18 @@ def mair_ls_serial(catalogue, latest=False, **kwargs) -> pd.DataFrame:
 def create_parser(**kwargs):
     parser = argparse.ArgumentParser(**kwargs)
     parser.add_argument(
+        "-t",
+        "--target",
+        type=str,
+        default=None,
+        help="MSAT target number",
+    )
+    parser.add_argument(
         "-f",
         "--flight-name",
         type=str,
         default=None,
-        help="flight name e.g. (RF06, MX011)",
+        help="flight name e.g. RF06, MX011 for MAIR or unique 8 character collection ID for MSAT",
     )
     parser.add_argument(
         "--uri",
@@ -217,13 +266,13 @@ def create_parser(**kwargs):
         "--target-name",
         type=str,
         default=None,
-        help="Pattern to look for in the target name",
+        help="Pattern to look for in the MAIR level3 target name",
     )
     parser.add_argument(
         "--production-environment",
         type=str,
         default=None,
-        help="production environment e.g. prod or stag or dev",
+        help="MAIR production environment e.g. prod or stag or dev",
     )
     parser.add_argument(
         "--type",
@@ -241,7 +290,7 @@ def create_parser(**kwargs):
         "--molecule",
         type=str,
         default=None,
-        help="L2_granret only, molecule name: CO2, H2O, or O2",
+        help="molecule name: CH4, H2O, or O2",
     )
 
     return parser
