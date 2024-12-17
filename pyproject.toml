@@ -37,7 +37,9 @@ notebooks = [
     "cartopy",
     "geoviews",
     "geopandas",
-    "datashader"
+    "datashader",
+    "pyproj",
+    "contextily",
 ]
 gcsfs = [
     "fsspec",
