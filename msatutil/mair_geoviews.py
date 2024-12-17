@@ -257,6 +257,8 @@ def save_static_plot_with_widgets(
     browser_tab_title: str = "MethaneSAT",
     layout_title: str = "",
     layout_details: str = "",
+    linked_colorbars: bool = False,
+    exclude_links: Optional[list[str]] = None,
 ) -> None:
     """
     Save the output of show_map to a html file
@@ -281,7 +283,12 @@ def save_static_plot_with_widgets(
 
     if type(bokeh_plot) is bokeh.models.plots.GridPlot:
         # Layout of multiple figures
-        first_colorbar = bokeh_plot.children[0][0].select_one(ColorBar)
+        colorbar_list = [
+            i[0].select_one(ColorBar)
+            for i in bokeh_plot.children
+            if "Tile source" not in i[0].title.text
+            and not any([j.lower() in i[0].title.text.lower() for j in exclude_links])
+        ]
         glyph_list = [
             fig[0].renderers[1].glyph
             for fig in bokeh_plot.children
@@ -304,25 +311,40 @@ def save_static_plot_with_widgets(
             fig[0].add_tools(CrosshairTool(overlay=[width, height]))
     elif type(bokeh_plot) is bokeh.plotting._figure.figure:
         # Single figure
-        first_colorbar = bokeh_plot.select_one(ColorBar)
+        colorbar_list = [bokeh_plot.select_one(ColorBar)]
         glyph_list = [bokeh_plot.renderers[1].glyph]
+
+    if linked_colorbars:
+        for colorbar in colorbar_list:
+            colorbar.color_mapper.high_color = "red"
+    else:
+        colorbar_list = [colorbar_list[0]]
+        colorbar_list[0].color_mapper.high_color = "red"
 
     # Numeric inputs for the first colorbar limits
     callback = CustomJS(
-        args={"color_mapper": first_colorbar.color_mapper},
-        code="color_mapper.low = cb_obj.value;",
+        args={"color_mappers": [i.color_mapper for i in colorbar_list]},
+        code="""
+            for (let i = 0; i < color_mappers.length; i++) {
+                color_mappers[i].low = cb_obj.value;
+            }
+        """,
     )
     first_colorbar_low = NumericInput(
-        value=first_colorbar.color_mapper.low, width=100, title="1st colorbar Low", mode="float"
+        value=colorbar_list[0].color_mapper.low, width=100, title="1st colorbar Low", mode="float"
     )
     first_colorbar_low.js_on_change("value", callback)
 
     callback = CustomJS(
-        args={"color_mapper": first_colorbar.color_mapper},
-        code="color_mapper.high = cb_obj.value;",
+        args={"color_mappers": [i.color_mapper for i in colorbar_list]},
+        code="""
+            for (let i = 0; i < color_mappers.length; i++) {
+                color_mappers[i].high = cb_obj.value;
+            }
+        """,
     )
     first_colorbar_high = NumericInput(
-        value=first_colorbar.color_mapper.high, width=100, title="1st colorbar High", mode="float"
+        value=colorbar_list[0].color_mapper.high, width=100, title="1st colorbar High", mode="float"
     )
     first_colorbar_high.js_on_change("value", callback)
 
@@ -340,6 +362,10 @@ def save_static_plot_with_widgets(
     palette_dict = {k.lower() + " (u)": process_cmap(k) for k in uniform_sequential_palettes}
     for k in set(sequential_palettes).difference(uniform_sequential_palettes):
         palette_dict[k.lower()] = process_cmap(k)
+    for k in ["turbo", "jet", "rainbow"]:
+        palette_dict[k.lower()] = process_cmap(k)
+        k_r = f"{k}_r"
+        palette_dict[k_r.lower()] = process_cmap(k_r)
 
     palette_select = Select(
         options=sorted(list(palette_dict.keys())),
@@ -433,7 +459,9 @@ def read_variables(
                 if i == 0 and option is not None:
                     v = getattr(np, option)(v, axis=nc[var].dimensions.index(option_axis_dim))
                 if i == 0 and apply_flag:
-                    assert nc[apply_flag][:].shape == v.shape, f"Flag variable {apply_flag} has shape {nc[apply_flag][:].shape}, but first variable {var} has shape {v.shape}"
+                    assert (
+                        nc[apply_flag][:].shape == v.shape
+                    ), f"Flag variable {apply_flag} has shape {nc[apply_flag][:].shape}, but first variable {var} has shape {v.shape}"
                     flags = nc[apply_flag][:].astype(float).filled(np.nan)
                     v[flags != 0] = np.nan
                 var_list += [v]
