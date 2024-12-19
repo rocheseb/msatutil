@@ -819,8 +819,8 @@ class msat_collection:
         self,
         var: str,
         sv_var: Optional[str] = None,
-        over: str = "red",
-        under: str = "hotpink",
+        over: Optional[str] = "red",
+        under: Optional[str] = "hotpink",
         latlon: bool = False,
         use_corners: bool = False,
         ratio: bool = False,
@@ -852,8 +852,8 @@ class msat_collection:
         var (str): key contained in the variable to search (uses msat_nc fetch method)
         sv_var: sv_var must be one of SpecFitDiagnostics/APrioriState or SpecFitDiagnostics/APosterioriState, and var must be the exact SubStateName of the state vector variable
         vminmax (Optional[Annotated[Sequence[float], 2]]): min and max value to be shown with the colorbar
-        over (str): color to use above the max of the color scale (only used if vminmax is not None)
-        under (str): color to use under the min of the color scale (only used if vminmax is not None)
+        over (Optional[str]): color to use above the max of the color scale (only used if vminmax is not None)
+        under (Optional[str]): color to use under the min of the color scale (only used if vminmax is not None)
         latlon (bool): if True, make the plot on latitude/longitude instead of xtrack/atrack
         use_corners (bool): if True, make the plot using polygons from the corner lat/lon
         ratio (bool): if True, plots the variable divided by its median
@@ -1178,8 +1178,8 @@ class msat_collection:
         lat: Optional[np.ndarray[float]] = None,
         latlon: bool = False,
         vertices: Optional[np.ndarray[float]] = None,
-        over: str = "red",
-        under: str = "hotpink",
+        over: Optional[str] = "red",
+        under: Optional[str] = "hotpink",
         colorbar_label: str = "",
         xlabel: str = "",
         ylabel: str = "",
@@ -1224,8 +1224,10 @@ class msat_collection:
             # disable scientific notations in axis numbers
             ax.get_xaxis().get_major_formatter().set_useOffset(False)
             ax.get_yaxis().get_major_formatter().set_useOffset(False)
-        m.cmap.set_over(over)
-        m.cmap.set_under(under)
+        if over is not None:
+            m.cmap.set_over(over)
+        if under is not None:
+            m.cmap.set_under(under)
 
         # General plot layout
         if vmin is not None and vmax is not None:
