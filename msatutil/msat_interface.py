@@ -9,6 +9,10 @@ from datetime import datetime
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.collections import PolyCollection
+import contextily as ctx
+from pyproj import Transformer
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 from shapely.geometry import Polygon
 import argparse
 from msatutil.msat_nc import msat_nc, MSATError
@@ -25,6 +29,8 @@ from tqdm import tqdm
 from msatutil.make_hist import make_hist
 from msatutil.msat_dset import gs_list
 import warnings
+
+GOOGLE_TILE_SOURCE = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
 
 
 @dask.delayed
@@ -164,6 +170,127 @@ def get_msat(
             flist, date_range=date_range, date_pattern=date_pattern, use_dask=True
         )
     return result
+
+
+def _make_heatmap_with_background_tile(
+    ax: plt.Axes,
+    lon: np.ndarray,
+    lat: np.ndarray,
+    z: np.ndarray,
+    latlon_padding: float = 0,
+    latlon_step: float = 0.5,
+    lab_prec: int = 1,
+    tile_source: str = GOOGLE_TILE_SOURCE,
+    **kwargs,
+):
+    """
+    ax: matplotlib axes
+    lon (np.ndarray): longitude
+    lat (np.ndarray): latitude
+    z (np.ndarray): variable for the heatmap
+    latlon_padding (float): add above/below the max/min lat and lon
+    latlon_step (float): the spacing between lat/lon ticks
+    lab_prec (int): number of decimals for the lat/lon tick labels
+    kwargs: passed to the pcolormesh call
+    """
+    vmin = kwargs.get("vmin")
+    vmax = kwargs.get("vmax")
+
+    lon_min, lon_max = np.nanmin(lon) - latlon_padding, np.nanmax(lon) + latlon_padding
+    lat_min, lat_max = np.nanmin(lat) - latlon_padding, np.nanmax(lat) + latlon_padding
+
+    # round to nearest .5
+    lon_start = np.floor(lon_min * 2) / 2
+    lat_start = np.floor(lat_min * 2) / 2
+
+    delta_lat = lat_max - lat_min
+    delta_lon = lon_max - lon_min
+    n_ticks = np.max([int(delta_lat / latlon_step) + 2, int(delta_lon / latlon_step) + 2])
+    lon_ticks = lon_start + np.arange(n_ticks) * latlon_step
+    lat_ticks = lat_start + np.arange(n_ticks) * latlon_step
+
+    # The background tiles are on Web Mercator
+    # Transform coordinates to Web Mercator (EPSG:3857)
+    transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+
+    # Transform lon/lat ticks to x/y in Web Mercator projection
+    x_ticks, y_ticks = transformer.transform(lon_ticks, lat_ticks)
+
+    # Now transform the main lon, lat arrays for plotting (after tick creation)
+    x, y = transformer.transform(lon, lat)
+    xmin, ymin = transformer.transform(lon_min, lat_min)
+    xmax, ymax = transformer.transform(lon_max, lat_max)
+
+    m = ax.pcolormesh(x, y, z, **kwargs)
+
+    try:
+        # Use pcolormesh by default
+        m = ax.pcolormesh(
+            x,
+            y,
+            z,
+            **kwargs,
+        )
+    except ValueError:
+        # pcolormesh can't handle nans in lon and lat
+        # fall back to contourf when that is the case
+        levels = np.linspace(vmin, vmax, 100) if vmin and vmax else 100
+        m = ax.contourf(
+            x,
+            y,
+            z,
+            levels,
+            extend="both",
+            **kwargs,
+        )
+        ax.figure.suptitle("Using contourf", color="red")
+
+    # Format longitude/latitude labels
+    def format_latlon(value, is_lon):
+        """
+        Format the lat/lon to show degrees and direction (N, S, E, W).
+        """
+        if is_lon:
+            direction = "E" if value >= 0 else "W"
+            value = abs(value)
+        else:
+            direction = "N" if value >= 0 else "S"
+            value = abs(value)
+
+        return f"{value:.{lab_prec}f}°{direction}"
+
+    ax.set_aspect("equal")
+
+    # Set the ticks on the plot
+    ax.set_xticks(x_ticks)
+    ax.set_yticks(y_ticks)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
+    # Apply formatted labels
+    ax.set_xticklabels([format_latlon(lon, is_lon=True) for lon in lon_ticks])
+    ax.set_yticklabels([format_latlon(lat, is_lon=False) for lat in lat_ticks])
+    ax.grid(linestyle="--", alpha=0.4)
+
+    # Add Google Satellite tiles as the basemap
+    ctx.add_basemap(ax, source=tile_source, crs="EPSG:3857")
+
+    # Add scalebar
+    scalebar = AnchoredSizeBar(
+        ax.transData,  # Transformation to use
+        50000,  # Length of the scalebar in data units (e.g., 100 km = 100,000 meters for Web Mercator)
+        "50 km",  # Label for the scalebar
+        "lower left",  # Location of the scalebar
+        pad=0.3,  # Padding around the scalebar
+        color="white",  # Color of the scalebar
+        frameon=False,  # Remove the surrounding frame
+        size_vertical=500,  # Thickness of the scalebar
+        fontproperties=fm.FontProperties(size=12),  # Font size of the label
+        label_top=True,  # Label above the scalebar
+    )
+    ax.add_artist(scalebar)
+
+    return m
 
 
 class msat_collection:
@@ -836,6 +963,7 @@ class msat_collection:
         scale: float = 1.0,
         set_nan: Optional[float] = None,
         use_valid_xtrack: bool = False,
+        colorbar_label: Optional[str] = None,
         **kwargs,  # matplotlib pcolormesh arguments
     ) -> np.ndarray[float]:
         """
@@ -866,6 +994,8 @@ class msat_collection:
         cmap (str): matplotlib named colormaps (https://matplotlib.org/stable/gallery/color/colormap_reference.html)
         set_nan (Optional[float]): this value will be replaced with nan after a pmesh_prep call
         use_valid_xtrack (bool): if True, only gets the data along the self.valid_xtrack slice
+        colorbar_label (Optional[str]): if givem set as the colorbar label
+        kwargs: passed to the pcolormesh call
 
         Outputs:
             the pmesh_prep (or grid_prep if lon_lim/lat_lim are given) output for the plotted variable
@@ -912,6 +1042,10 @@ class msat_collection:
                 if not use_corners:
                     lon = self.lon[geo_key]
                     lat = self.lat[geo_key]
+                else:
+                    lon = None
+                    lat = None
+
             x = self.pmesh_prep(
                 var,
                 sv_var=sv_var,
@@ -966,19 +1100,22 @@ class msat_collection:
         # end of elif gridded
 
         # Define some plot attributes
-        if var == "dp":
-            colorbar_label = r"$\Delta P$"
-        elif sv_var:
-            colorbar_label = sv_var
+        if colorbar_label is not None:
+            pass
         else:
-            colorbar_label = var
+            if var == "dp":
+                colorbar_label = r"$\Delta P$"
+            elif sv_var:
+                colorbar_label = sv_var
+            else:
+                colorbar_label = var
 
-        units = self.fetch_units(var)
-        if units:
-            colorbar_label = f"{colorbar_label} ({units})"
+            units = self.fetch_units(var)
+            if units:
+                colorbar_label = f"{colorbar_label} ({units})"
 
-        if option:
-            colorbar_label = f"{option} {colorbar_label}"
+            if option:
+                colorbar_label = f"{option} {colorbar_label}"
 
         if self.start_dates is not None:
             start_dates = sorted([self.start_dates[i] for i in ids])
@@ -1065,32 +1202,13 @@ class msat_collection:
             ax.set_xlim(all_points[:, 0].min(), all_points[:, 0].max())
             ax.set_ylim(all_points[:, 1].min(), all_points[:, 1].max())
         elif lat is not None and lon is not None:
-            try:
-                # Use pcolormesh by default
-                m = ax.pcolormesh(
-                    lon,
-                    lat,
-                    x,
-                    **kwargs,
-                )
-            except ValueError:
-                # pcolormesh can't handle nans in lon and lat
-                # fall back to contourf when that is the case
-                levels = np.linspace(vmin, vmax, 100) if vmin and vmax else 100
-                m = ax.contourf(
-                    lon,
-                    lat,
-                    x,
-                    levels,
-                    extend="both",
-                    **kwargs,
-                )
-                ax.set_ylim(np.nanmin(lat), np.nanmax(lat))
-                ax.set_xlim(np.nanmin(lon), np.nanmax(lon))
-                ax.figure.suptitle("Using contourf", color="red")
+            m = _make_heatmap_with_background_tile(ax, lon, lat, x, **kwargs)
         else:
             # plotting against along-track and across-track indices
             m = ax.pcolormesh(x, **kwargs)
+            # disable scientific notations in axis numbers
+            ax.get_xaxis().get_major_formatter().set_useOffset(False)
+            ax.get_yaxis().get_major_formatter().set_useOffset(False)
         m.cmap.set_over(over)
         m.cmap.set_under(under)
 
@@ -1109,10 +1227,6 @@ class msat_collection:
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-
-        # disable scientific notations in axis numbers
-        ax.get_xaxis().get_major_formatter().set_useOffset(False)
-        ax.get_yaxis().get_major_formatter().set_useOffset(False)
 
     def search(self, key: str) -> None:
         """
