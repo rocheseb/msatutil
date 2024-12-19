@@ -844,6 +844,7 @@ class msat_collection:
         use_valid_xtrack: bool = False,
         colorbar_label: Optional[str] = None,
         cb_fraction: float = 0.04,
+        mask: Optional[np.ndarray] = None,
         **kwargs,  # matplotlib pcolormesh arguments
     ) -> np.ndarray[float]:
         """
@@ -876,6 +877,7 @@ class msat_collection:
         use_valid_xtrack (bool): if True, only gets the data along the self.valid_xtrack slice
         colorbar_label (Optional[str]): if givem set as the colorbar label
         cb_fraction (float): controls the size of the colorbar
+        mask (Optional[np.ndarray]): Boolean arrays where True will be set to nan before plotting
         kwargs: passed to make_heatmap, _make_heatmap_with_background_tile, and the pcolormesh call
 
         Outputs:
@@ -1018,6 +1020,9 @@ class msat_collection:
             else:
                 xlabel = "cross-track index"
                 ylabel = "along-track index"
+
+        if mask is not None:
+            x[mask] = np.nan
 
         # make the plot
         msat_collection.make_heatmap(
