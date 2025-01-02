@@ -1059,6 +1059,7 @@ class msat_collection:
         latlon_step: float = 0.5,
         lab_prec: int = 1,
         tile_source: str = GOOGLE_TILE_SOURCE,
+        gridlines: bool = True,
         **kwargs,
     ):
         """
@@ -1069,6 +1070,8 @@ class msat_collection:
         latlon_padding (float): add above/below the max/min lat and lon
         latlon_step (float): the spacing between lat/lon ticks
         lab_prec (int): number of decimals for the lat/lon tick labels
+        tile_source (str): the WMTS URL for the background tiles, defaults to Google imagery
+        gridlines (bool): if True, draw gridlines
         kwargs: passed to the pcolormesh call
         """
         vmin = kwargs.get("vmin")
@@ -1093,6 +1096,9 @@ class msat_collection:
 
         # Transform lon/lat ticks to x/y in Web Mercator projection
         x_ticks, y_ticks = transformer.transform(lon_ticks, lat_ticks)
+
+        if lon.ndim == 1:
+            lon, lat = np.meshgrid(lon, lat)
 
         # Now transform the main lon, lat arrays for plotting (after tick creation)
         x, y = transformer.transform(lon, lat)
@@ -1148,7 +1154,8 @@ class msat_collection:
         # Apply formatted labels
         ax.set_xticklabels([format_latlon(lon, is_lon=True) for lon in lon_ticks])
         ax.set_yticklabels([format_latlon(lat, is_lon=False) for lat in lat_ticks])
-        ax.grid(linestyle="--", alpha=0.4)
+        if gridlines:
+            ax.grid(linestyle="--", alpha=0.4)
 
         # Add Google Satellite tiles as the basemap
         ctx.add_basemap(ax, source=tile_source, crs="EPSG:3857")
