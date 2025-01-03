@@ -126,7 +126,7 @@ def show_map(
     single_panel: bool = False,
     pixel_ratio: int = 1,
     active_tools: list[str] = ["pan", "wheel_zoom"],
-    tools: list[str] = [],
+    tools: list[str] = ["fullscreen"],
     pixel_resolution: Optional[tuple[float, float]] = None,
     clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
 ):
@@ -233,6 +233,8 @@ def show_map(
             cmap=cmap,
             colorbar=True,
             alpha=0,
+            active_tools=active_tools,
+            tools=tools,
             title=f"Tile source: {background_tile_list[0].name}",
             **scalebar_args,
         )
@@ -258,7 +260,7 @@ def save_static_plot_with_widgets(
     layout_title: str = "",
     layout_details: str = "",
     linked_colorbars: bool = False,
-    exclude_links: Optional[list[str]] = None,
+    exclude_links: list[str] = [],
 ) -> None:
     """
     Save the output of show_map to a html file
@@ -276,6 +278,9 @@ def save_static_plot_with_widgets(
         cmap (str): initial colormap
         browser_tab_title (str): the title of the tab in the browser
         layout_title (str): text for a title Div above the layout
+        layout_details (str): more info to include below the title
+        linked_colorbars (bool): if True, all colorbars will be updated by the colorbar limits inputs
+        exclude_links (list[str]): when linked_colorbars is True, this lists plot title to exclude
     """
 
     # Convert the holoviews layout object to a bokeh object
@@ -309,6 +314,14 @@ def save_static_plot_with_widgets(
         height = Span(dimension="height", line_dash="dashed")
         for fig in bokeh_plot.children:
             fig[0].add_tools(CrosshairTool(overlay=[width, height]))
+        # make each subplot toolbar visible
+        for plot in bokeh_plot.children:
+            plot[0].toolbar_location = "right"
+            plot[0].toolbar.visible = True
+            plot[0].toolbar.logo = None
+            for tool in plot[0].tools:
+                if isinstance(tool, CrosshairTool):
+                    tool.visible = False
     elif type(bokeh_plot) is bokeh.plotting._figure.figure:
         # Single figure
         colorbar_list = [bokeh_plot.select_one(ColorBar)]
