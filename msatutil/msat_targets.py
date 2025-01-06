@@ -30,7 +30,7 @@ def make_msat_targets_map(infile: str, outfile: str, title: str = "MethaneSAT ta
     polygons = gv.Polygons(gdf, vdims=["id", "name", "type", "color", "default_color"])
     plot = base_map * polygons.opts(
         hv.opts.Polygons(
-            tools=["hover"],
+            tools=["hover", "fullscreen"],
             active_tools=["pan", "wheel_zoom"],
             color="color",
             alpha=0.7,
