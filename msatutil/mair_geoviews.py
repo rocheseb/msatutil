@@ -578,6 +578,8 @@ def do_html_plot(
     pixel_resolution: Optional[tuple[float, float]] = None,
     clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
     custom_data: Optional[dict] = None,
+    lat_offset: float = 0,
+    lon_offset: float = 0,
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -624,6 +626,8 @@ def do_html_plot(
             }
             "clim": [(start1,end1),(start2,end2),...]
         }
+    lat_offset (float): can be given to try shifting the image in latitudes
+    lon_offset (float): can be given to try shifting the image in longitudes
     """
     out_file = set_outfile(in_path, out_path)
 
@@ -647,6 +651,9 @@ def do_html_plot(
         )
         clim_list = [None for i in var_list]
         clim_list[0] = clim
+
+    lat += lat_offset
+    lon += lon_offset
 
     if title:
         title_list[0] = title
