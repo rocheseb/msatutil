@@ -1060,6 +1060,9 @@ class msat_collection:
         lab_prec: int = 1,
         tile_source: str = GOOGLE_TILE_SOURCE,
         gridlines: bool = True,
+        add_basemap: bool = True,
+        lon_extent: Optional[tuple[float, float]] = None,
+        lat_extent: Optional[tuple[float, float]] = None,
         **kwargs,
     ):
         """
@@ -1072,13 +1075,22 @@ class msat_collection:
         lab_prec (int): number of decimals for the lat/lon tick labels
         tile_source (str): the WMTS URL for the background tiles, defaults to Google imagery
         gridlines (bool): if True, draw gridlines
+        add_basemap (bool): if False, will not add the background tiles
+        lon_extent (Optional[tuple[float, float]]): prescribed min/max longitude
+        lat_extent (Optional[tuple[float, float]]): prescribed min/max latitude
         kwargs: passed to the pcolormesh call
         """
         vmin = kwargs.get("vmin")
         vmax = kwargs.get("vmax")
 
-        lon_min, lon_max = np.nanmin(lon) - latlon_padding, np.nanmax(lon) + latlon_padding
-        lat_min, lat_max = np.nanmin(lat) - latlon_padding, np.nanmax(lat) + latlon_padding
+        if lon_extent is not None:
+            lon_min, lon_max = lon_extent
+        else:
+            lon_min, lon_max = np.nanmin(lon) - latlon_padding, np.nanmax(lon) + latlon_padding
+        if lat_extent is not None:
+            lat_min, lat_max = lat_extent
+        else:
+            lat_min, lat_max = np.nanmin(lat) - latlon_padding, np.nanmax(lat) + latlon_padding
 
         # round to nearest .5
         lon_start = np.floor(lon_min * 2) / 2
@@ -1104,8 +1116,6 @@ class msat_collection:
         x, y = transformer.transform(lon, lat)
         xmin, ymin = transformer.transform(lon_min, lat_min)
         xmax, ymax = transformer.transform(lon_max, lat_max)
-
-        m = ax.pcolormesh(x, y, z, **kwargs)
 
         try:
             # Use pcolormesh by default
@@ -1157,8 +1167,9 @@ class msat_collection:
         if gridlines:
             ax.grid(linestyle="--", alpha=0.4)
 
-        # Add Google Satellite tiles as the basemap
-        ctx.add_basemap(ax, source=tile_source, crs="EPSG:3857")
+        if add_basemap:
+            # Add Google Satellite tiles as the basemap
+            ctx.add_basemap(ax, source=tile_source, crs="EPSG:3857")
 
         # Add scalebar
         scalebar = AnchoredSizeBar(
