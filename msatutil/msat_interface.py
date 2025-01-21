@@ -285,6 +285,9 @@ class msat_collection:
         is_l2_met: {self.is_l2_met}
         """
 
+    def __iter__(self):
+        return iter(self.msat_files.items())
+
     @staticmethod
     def convert_time_format(time_format: str):
         """
@@ -1064,6 +1067,8 @@ class msat_collection:
         lon_extent: Optional[tuple[float, float]] = None,
         lat_extent: Optional[tuple[float, float]] = None,
         scalebar_km: float = 50,
+        scalebar_thickness: float = 500,
+        rounding_factor: int = 2,
         **kwargs,
     ):
         """
@@ -1080,6 +1085,7 @@ class msat_collection:
         lon_extent (Optional[tuple[float, float]]): prescribed min/max longitude
         lat_extent (Optional[tuple[float, float]]): prescribed min/max latitude
         scalebar_km (float): the length of the scalebar in km
+        rounding_factor (int): use for rounding the starting lat/lon label, 2 is nearest .5
         kwargs: passed to the pcolormesh call
         """
         vmin = kwargs.get("vmin")
@@ -1094,9 +1100,8 @@ class msat_collection:
         else:
             lat_min, lat_max = np.nanmin(lat) - latlon_padding, np.nanmax(lat) + latlon_padding
 
-        # round to nearest .5
-        lon_start = np.floor(lon_min * 2) / 2
-        lat_start = np.floor(lat_min * 2) / 2
+        lon_start = np.floor(lon_min * rounding_factor) / rounding_factor
+        lat_start = np.floor(lat_min * rounding_factor) / rounding_factor
 
         delta_lat = lat_max - lat_min
         delta_lon = lon_max - lon_min
@@ -1185,7 +1190,7 @@ class msat_collection:
             pad=0.3,  # Padding around the scalebar
             color="white",  # Color of the scalebar
             frameon=False,  # Remove the surrounding frame
-            size_vertical=500,  # Thickness of the scalebar
+            size_vertical=scalebar_thickness,  # Thickness of the scalebar
             fontproperties=fm.FontProperties(size=12),  # Font size of the label
             label_top=True,  # Label above the scalebar
         )
