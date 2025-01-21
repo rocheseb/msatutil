@@ -1063,6 +1063,7 @@ class msat_collection:
         add_basemap: bool = True,
         lon_extent: Optional[tuple[float, float]] = None,
         lat_extent: Optional[tuple[float, float]] = None,
+        scalebar_km: float = 50,
         **kwargs,
     ):
         """
@@ -1078,6 +1079,7 @@ class msat_collection:
         add_basemap (bool): if False, will not add the background tiles
         lon_extent (Optional[tuple[float, float]]): prescribed min/max longitude
         lat_extent (Optional[tuple[float, float]]): prescribed min/max latitude
+        scalebar_km (float): the length of the scalebar in km
         kwargs: passed to the pcolormesh call
         """
         vmin = kwargs.get("vmin")
@@ -1171,11 +1173,14 @@ class msat_collection:
             # Add Google Satellite tiles as the basemap
             ctx.add_basemap(ax, source=tile_source, crs="EPSG:3857")
 
+        lat_mid = lat_min + (lat_max - lat_min) / 2
+        scalebar_merc = 1e3 * scalebar_km * np.cos(np.deg2rad(lat_mid))
+
         # Add scalebar
         scalebar = AnchoredSizeBar(
             ax.transData,  # Transformation to use
-            50000,  # Length of the scalebar in data units (e.g., 100 km = 100,000 meters for Web Mercator)
-            "50 km",  # Label for the scalebar
+            scalebar_merc,  # Length of the scalebar in data units (e.g., 100 km = 100,000 meters for Web Mercator)
+            f"{scalebar_km} km",  # Label for the scalebar
             "lower left",  # Location of the scalebar
             pad=0.3,  # Padding around the scalebar
             color="white",  # Color of the scalebar
@@ -1257,7 +1262,7 @@ class msat_collection:
         elif vmin is None and vmax is None:
             extend = "neither"
 
-        plt.colorbar(m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction)
+        plt.colorbar(m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction, pad=0.02)
 
         ax.set_title(title)
         ax.set_xlabel(xlabel)
