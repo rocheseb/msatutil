@@ -64,8 +64,10 @@ def make_msat_targets_map(
     gdf.loc[gdf["type"] == "CalVal", "default_color"] = "yellow"
 
     gdf["color"] = gdf["default_color"].copy()
+    gdf["line_color"] = "black"
+    gdf["alpha"] = 0.7
 
-    vdims = ["id", "name", "type", "color", "default_color"]
+    vdims = ["id", "name", "type", "color", "default_color", "line_color", "alpha"]
     hover_tooltips = [
         ("id", "@id"),
         ("Name", "@name"),
@@ -83,6 +85,12 @@ def make_msat_targets_map(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
             )
             gdf.loc[gdf["id"] == t, "ncollections"] = len(list(td[t].keys()))
+        gdf.loc[gdf["ncollections"] == 0, "line_color"] = gdf.loc[
+            gdf["ncollections"] == 0, "default_color"
+        ]
+        gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
+        gdf.loc[gdf["ncollections"] == 0, "color"] = "lightgray"
+        gdf.loc[gdf["ncollections"] == 0, "alpha"] = 0.5
 
     base_map = gv.tile_sources.EsriImagery()
     polygons = gv.Polygons(gdf, vdims=vdims)
@@ -91,8 +99,8 @@ def make_msat_targets_map(
             tools=["hover", "fullscreen", "tap"],
             active_tools=["pan", "wheel_zoom", "tap"],
             color="color",
-            alpha=0.7,
-            line_color="black",
+            alpha="alpha",
+            line_color="line_color",
             width=1100,
             height=800,
             hover_tooltips=hover_tooltips,
