@@ -1,7 +1,7 @@
 import argparse
 import holoviews as hv
 import geoviews as gv
-from bokeh.models import NumericInput, CustomJS, Row, TapTool
+from bokeh.models import NumericInput, CustomJS, Row, Column, TapTool, Div
 from bokeh.embed import file_html
 from bokeh.resources import CDN
 import geopandas as gpd
@@ -147,6 +147,7 @@ def make_msat_targets_map(
     var selected_id = cb_obj.value;
     var color = data['color'];
     var default_color = data['default_color'];
+    var line_color = data['line_color'];
     var xs = data['xs'];
     var ys = data['ys'];
     var name = data['name'];
@@ -168,6 +169,7 @@ def make_msat_targets_map(
         ids.push(ids.splice(hid,1)[0]);
         data['id'] = new Int32Array(ids);
         default_color.push(default_color.splice(hid,1)[0]);
+        line_color.push(line_color.splice(hid,1)[0]);
         for (var i=0;i<color.length;i++){
             color[i] = default_color[i];
         }
@@ -181,7 +183,31 @@ def make_msat_targets_map(
     callback = CustomJS(args=dict(source=bokeh_plot.renderers[1].data_source), code=code)
     inp.js_on_change("value", callback)
 
-    layout = Row(bokeh_plot, inp)
+    legend_div = Div(
+        text="""
+    <div style="padding:10px; width:150px;">
+
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:purple; margin-right:5px;"></div>
+        <span>Oil & Gas</span>
+      </div>
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:green; margin-right:5px;"></div>
+        <span>Agriculture</span>
+      </div>
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:yellow; margin-right:5px;"></div>
+        <span>Cal/Val</span>
+      </div>
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:lightgray; margin-right:5px;"></div>
+        <span>No collects</span>
+      </div>
+    </div>
+    """
+    )
+
+    layout = Row(bokeh_plot, Column(inp, legend_div))
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
