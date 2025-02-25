@@ -13,6 +13,7 @@ from bokeh.models import (
     ColumnDataSource,
     HoverTool,
     Button,
+    DateRangeSlider,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -137,7 +138,7 @@ def make_msat_targets_map(
         scatter_df["timestamps"] = scatter_df["File"].apply(extract_timestamp)
         scatter_df["counts"] = 1
         scatter_df.loc[pd.isna(scatter_df["timestamps"]), "counts"] = 0
-        scatter_df = scatter_df.sort_values(by=["timestamps"])
+        scatter_df = scatter_df.sort_values(by=["timestamps"]).reset_index()
         scatter_df["cumulcounts"] = scatter_df["counts"].cumsum()
         scatter_df["color"] = "#1f77b4"
         scatter_df["size"] = 4
@@ -325,6 +326,64 @@ def make_msat_targets_map(
             text=f"Last update: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
             width=300,
         )
+
+        start = scatter_df["timestamps"][0].date()
+        end = scatter_df["timestamps"][len(scatter_df.index) - 1].date()
+        date_slider = DateRangeSlider(
+            value=(start, end),
+            start=start,
+            end=end,
+            width=300,
+        )
+        date_slider_info_div = Div(
+            text=f"{scatter_df['counts'].sum()} collects in selected date range", width=400
+        )
+        date_slider_callback = CustomJS(
+            args={"info_div": date_slider_info_div, "scatter_source": scatter_source},
+            code="""
+            const timestamps = scatter_source.data["timestamps"];
+            const start = cb_obj.value[0];
+            const end = cb_obj.value[1] + 86400000; // make the last date inclusive
+            const count = timestamps.filter(x => x >= start && x <= end).length;
+            info_div.text = `${count} collects in selected date range`;
+            """,
+        )
+        date_slider.js_on_change("value_throttled", date_slider_callback)
+        date_slider_button = Button(label="Copy collection paths in selected date range", width=300)
+        date_slider_button.js_on_click(
+            CustomJS(
+                args={"scatter_source": scatter_source, "date_slider": date_slider},
+                code="""
+            const timestamps = scatter_source.data["timestamps"];
+            const ids = scatter_source.data["id"];
+            const paths = scatter_source.data["File"];
+            const start = date_slider.value[0];
+            const end = date_slider.value[1] + 86400000; // make the last date inclusive
+            let selected_paths = [];
+            let selected_ids = [];
+            for (let i=0;i<timestamps.length;i++){
+                if (timestamps[i] >= start && timestamps[i]<= end){
+                    selected_paths.push(paths[i]);
+                    selected_ids.push(ids[i]);
+                }
+            }
+
+            // sort the selected paths by target id
+            const sortedIndices = selected_ids.map((value, index) => index)
+                        .sort((i, j) => selected_ids[i] - selected_ids[j]);
+            const sorted_paths = sortedIndices.map(i => selected_paths[i]);
+
+            const combined_paths = sorted_paths.join('\\n');
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(combined_paths).then(function() {
+                alert(`File paths copied to clipboard`);
+            }, function(err) {
+                console.error('Failed to copy text: ', err);
+            });
+            """,
+            )
+        )
     # enf of if file_list is not None
 
     inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
@@ -374,13 +433,24 @@ def make_msat_targets_map(
         }
 
         poly_source.change.emit();
-        console.log(poly_source.data["fill_alpha"]);
     """,
     )
     alpha_button.js_on_click(alpha_button_callback)
 
     if file_list is not None:
-        layout = Row(bokeh_plot, Column(inp, legend_div, fig, creation_time_div, alpha_button))
+        layout = Row(
+            bokeh_plot,
+            Column(
+                inp,
+                legend_div,
+                fig,
+                date_slider,
+                date_slider_info_div,
+                date_slider_button,
+                creation_time_div,
+                alpha_button,
+            ),
+        )
     else:
         layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button))
 
