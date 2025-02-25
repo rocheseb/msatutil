@@ -12,6 +12,7 @@ from bokeh.models import (
     Div,
     ColumnDataSource,
     HoverTool,
+    Button,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -92,11 +93,12 @@ def make_msat_targets_map(
     gdf.loc[gdf["type"] == "Agriculture", "default_color"] = "green"
     gdf.loc[gdf["type"] == "CalVal", "default_color"] = "yellow"
 
-    gdf["color"] = gdf["default_color"].copy()
-    gdf["line_color"] = "black"
-    gdf["alpha"] = 0.7
+    gdf["fill_color"] = gdf["default_color"].copy()
+    gdf["line_color"] = gdf["default_color"]
+    gdf["fill_alpha"] = 0.7
+    gdf["default_alpha"] = gdf["fill_alpha"]
 
-    vdims = ["id", "name", "type", "color", "default_color", "line_color", "alpha"]
+    vdims = ["id", "name", "type", "fill_color", "default_color", "line_color", "fill_alpha", "default_alpha"]
     hover_tooltips = [
         ("id", "@id"),
         ("Name", "@name"),
@@ -118,12 +120,10 @@ def make_msat_targets_map(
             for c in td[t]:
                 for p in td[t][c]:
                     scatter_df.loc[len(scatter_df)] = [td[t][c][p], t]
-        gdf.loc[gdf["ncollections"] == 0, "line_color"] = gdf.loc[
-            gdf["ncollections"] == 0, "default_color"
-        ]
         gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
-        gdf.loc[gdf["ncollections"] == 0, "color"] = "lightgray"
-        gdf.loc[gdf["ncollections"] == 0, "alpha"] = 0.5
+        gdf.loc[gdf["ncollections"] == 0, "fill_color"] = "lightgray"
+        gdf.loc[gdf["ncollections"] == 0, "fill_alpha"] = 0.5
+        gdf.loc[gdf["ncollections"] == 0, "default_alpha"] = 0.5
 
         scatter_df["timestamps"] = scatter_df["File"].apply(extract_timestamp)
         scatter_df["counts"] = 1
@@ -139,8 +139,8 @@ def make_msat_targets_map(
         hv.opts.Polygons(
             tools=["hover", "fullscreen", "tap"],
             active_tools=["pan", "wheel_zoom", "tap"],
-            color="color",
-            alpha="alpha",
+            fill_color="fill_color",
+            fill_alpha="fill_alpha",
             line_color="line_color",
             width=1100,
             height=800,
@@ -158,7 +158,7 @@ def make_msat_targets_map(
     var data = poly_source.data;
     var ids = Array.from(data['id']);
     var selected_id = cb_obj.value;
-    var color = data['color'];
+    var color = data['fill_color'];
     var default_color = data['default_color'];
     var line_color = data['line_color'];
     var xs = data['xs'];
@@ -167,7 +167,7 @@ def make_msat_targets_map(
     var type = data['type'];
     var collections = data['collections'];
     var ncollections = Array.from(data['ncollections']);
-    var alpha = Array.from(data['alpha']);
+    var alpha = Array.from(data['fill_alpha']);
 
     var hid = -1;
     for (var i=0;i<ids.length;i++){
@@ -187,7 +187,7 @@ def make_msat_targets_map(
         ncollections.push(ncollections.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
         data['ncollections'] = new Int32Array(ncollections);
-        data['alpha'] = new Float32Array(alpha);
+        data['fill_alpha'] = new Float32Array(alpha);
         data['id'] = new Int32Array(ids);
         default_color.push(default_color.splice(hid,1)[0]);
         line_color.push(line_color.splice(hid,1)[0]);
@@ -345,10 +345,35 @@ def make_msat_targets_map(
     """
     )
 
+    alpha_button = Button(label="Zero Polygon Alpha", button_type="warning")
+    alpha_button_callback = CustomJS(
+        args={"poly_source": poly_source, "alpha_button": alpha_button},
+        code="""
+        var alpha = poly_source.data["fill_alpha"];
+        const default_alpha = poly_source.data["default_alpha"];
+
+        if (alpha_button.button_type==="warning") {
+            alpha_button.button_type = "primary";
+            alpha_button.label = "Raise Polygon Alpha";
+            alpha.fill(0);
+        } else {
+            alpha_button.button_type = "warning";
+            alpha_button.label = "Zero Polygon Alpha";
+            for (let i = 0; i < alpha.length; i++) {
+                alpha[i] = default_alpha[i];
+            }
+        }
+
+        poly_source.change.emit();
+        console.log(poly_source.data["fill_alpha"]);
+    """,
+    )
+    alpha_button.js_on_click(alpha_button_callback)
+
     if file_list is not None:
-        layout = Row(bokeh_plot, Column(inp, legend_div, fig, creation_time_div))
+        layout = Row(bokeh_plot, Column(inp, legend_div, fig, creation_time_div, alpha_button))
     else:
-        layout = Row(bokeh_plot, Column(inp, legend_div))
+        layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button))
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
