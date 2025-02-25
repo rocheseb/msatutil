@@ -1,14 +1,43 @@
 import argparse
+import re
+from datetime import datetime
 import holoviews as hv
 import geoviews as gv
-from bokeh.models import NumericInput, CustomJS, Row, Column, TapTool, Div
+from bokeh.models import (
+    NumericInput,
+    CustomJS,
+    Row,
+    Column,
+    TapTool,
+    Div,
+    ColumnDataSource,
+    HoverTool,
+)
 from bokeh.embed import file_html
 from bokeh.resources import CDN
+from bokeh.plotting import figure
+import pandas as pd
 import geopandas as gpd
 from typing import Optional
 from pathlib import Path
 
 gv.extension("bokeh")
+
+
+def extract_timestamp(text: str) -> Optional[str]:
+    """
+    Get a YYYYMMDDTHHMMSS timestamp from a string
+
+    Inputs:
+        text (str): input text to match
+    Outputs:
+        (Optional[str]): the timestamp (or None)
+    """
+    match = re.search(r"(\d{8}T\d{6})", text)
+    time_fmt = "%Y%m%dT%H%M%S"
+    if match:
+        return pd.to_datetime(datetime.strptime(match.group(1), time_fmt), format=time_fmt)
+    return None
 
 
 def get_target_dict(file_list: str) -> dict:
@@ -80,17 +109,29 @@ def make_msat_targets_map(
         hover_tooltips += [("# Collects", "@ncollections")]
         gdf["collections"] = ""
         gdf["ncollections"] = 0
+        scatter_df = pd.DataFrame(columns=["File", "id"])
         for t in td:
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
             )
             gdf.loc[gdf["id"] == t, "ncollections"] = len(list(td[t].keys()))
+            for c in td[t]:
+                for p in td[t][c]:
+                    scatter_df.loc[len(scatter_df)] = [td[t][c][p], t]
         gdf.loc[gdf["ncollections"] == 0, "line_color"] = gdf.loc[
             gdf["ncollections"] == 0, "default_color"
         ]
         gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "alpha"] = 0.5
+
+        scatter_df["timestamps"] = scatter_df["File"].apply(extract_timestamp)
+        scatter_df["counts"] = 1
+        scatter_df.loc[pd.isna(scatter_df["timestamps"]), "counts"] = 0
+        scatter_df = scatter_df.sort_values(by=["timestamps"])
+        scatter_df["cumulcounts"] = scatter_df["counts"].cumsum()
+        scatter_df["color"] = "#1f77b4"
+        scatter_df["size"] = 4
 
     base_map = gv.tile_sources.EsriImagery()
     polygons = gv.Polygons(gdf, vdims=vdims)
@@ -109,11 +150,77 @@ def make_msat_targets_map(
     )
     bokeh_plot = hv.render(plot, backend="bokeh")
 
+    poly_source = bokeh_plot.renderers[1].data_source
+
+    inp = NumericInput(value=None, title="Highlight this target id:")
+
+    inp_callback_code = """
+    var data = poly_source.data;
+    var ids = Array.from(data['id']);
+    var selected_id = cb_obj.value;
+    var color = data['color'];
+    var default_color = data['default_color'];
+    var line_color = data['line_color'];
+    var xs = data['xs'];
+    var ys = data['ys'];
+    var name = data['name'];
+    var type = data['type'];
+    var collections = data['collections'];
+    var ncollections = Array.from(data['ncollections']);
+    var alpha = Array.from(data['alpha']);
+
+    var hid = -1;
+    for (var i=0;i<ids.length;i++){
+        if (ids[i]==selected_id) {
+            hid=i;
+            break;
+        }
+    }
+
+    if (hid>=0){
+        name.push(name.splice(hid,1)[0]);
+        type.push(type.splice(hid,1)[0]);
+        xs.push(xs.splice(hid,1)[0]);
+        ys.push(ys.splice(hid,1)[0]);
+        ids.push(ids.splice(hid,1)[0]);
+        collections.push(collections.splice(hid,1)[0]);
+        ncollections.push(ncollections.splice(hid,1)[0]);
+        alpha.push(alpha.splice(hid,1)[0]);
+        data['ncollections'] = new Int32Array(ncollections);
+        data['alpha'] = new Float32Array(alpha);
+        data['id'] = new Int32Array(ids);
+        default_color.push(default_color.splice(hid,1)[0]);
+        line_color.push(line_color.splice(hid,1)[0]);
+        for (var i=0;i<color.length;i++){
+            color[i] = default_color[i];
+        }
+        color[color.length-1] = 'red';
+    } else {
+        color[color.length-1] = default_color[default_color.length-1];
+    }
+    poly_source.change.emit();
+    """
+
+    inp_callback_args = {"poly_source": poly_source}
+
+    poly_hover = bokeh_plot.select_one(HoverTool)
+    poly_hover.callback = CustomJS(
+        args={"inp": inp, "poly_source": poly_source},
+        code="""
+        const selected = cb_data["index"].indices;
+
+        if (selected.length>0) {
+            const index = selected[selected.length-1];
+            inp.value = poly_source.data["id"][index];
+        }
+        """,
+    )
+
     if file_list is not None:
         taptool = bokeh_plot.select_one(TapTool)
 
         taptool.callback = CustomJS(
-            args=dict(source=bokeh_plot.renderers[-1].data_source),
+            args=dict(source=poly_source),
             code="""
             const selected_indices = source.selected.indices;
             if (selected_indices.length > 0) {
@@ -139,49 +246,75 @@ def make_msat_targets_map(
         """,
         )
 
-    inp = NumericInput(value=None, title="Highlight this target id:")
+        scatter_source = ColumnDataSource(scatter_df)
+        fig = figure(
+            title=f"{scatter_df['counts'].sum()} collects over {len(list(td.keys()))} targets",
+            width=350,
+            height=300,
+            x_axis_type="datetime",
+            tools=["pan,wheel_zoom,box_zoom,reset,tap"],
+        )
+        scatter = fig.scatter(
+            "timestamps", "cumulcounts", source=scatter_source, color="color", size="size"
+        )
+        hover = HoverTool(tooltips=None, renderers=[scatter])
+        fig.add_tools(hover)
+        scatter_taptool = fig.select_one(TapTool)
 
-    code = """
-    var data = source.data;
-    var ids = Array.from(data['id']);
-    var selected_id = cb_obj.value;
-    var color = data['color'];
-    var default_color = data['default_color'];
-    var line_color = data['line_color'];
-    var xs = data['xs'];
-    var ys = data['ys'];
-    var name = data['name'];
-    var type = data['type'];
+        scatter_taptool.callback = CustomJS(
+            args={"scatter_source": scatter_source, "inp": inp},
+            code="""
+            const selected = scatter_source.selected.indices;
+            const file_path = scatter_source.data["File"][selected[selected.length-1]];
 
-    var hid = -1;
-    for (var i=0;i<ids.length;i++){
-        if (ids[i]==selected_id) {
-            hid=i;
-            break;
+            navigator.clipboard.writeText(file_path).then(function() {
+                    alert('File path copied to clipboard:\\n' + file_path);
+                }, function(err) {
+                    console.error('Failed to copy text: ', err);
+                });;
+
+            inp.value = scatter_source.data["id"][selected[selected.length-1]];
+
+            scatter_source.selected.indices = [];
+            scatter_source.change.emit()
+
+            """,
+        )
+
+        # CustomJS Callback to Highlight Polygons on Hover
+        hover.callback = CustomJS(
+            args=dict(scatter_source=scatter_source, inp=inp),
+            code="""
+            // Get hovered file from scatter
+            const hovered_indices = cb_data["index"].indices;
+            const scatter_data = scatter_source.data;
+
+            if (hovered_indices.length>0){
+                const hovered_index = hovered_indices[hovered_indices.length-1];
+                const target_id = scatter_source.data["id"][hovered_index];
+                inp.value = target_id;
+            } 
+
+            """,
+        )
+
+        inp_callback_args["scatter_source"] = scatter_source
+        inp_callback_code += """
+        var scatter_colors = scatter_source.data["color"];
+        var scatter_size = scatter_source.data["size"];
+        var ids = scatter_source.data["id"];
+
+        for (let i = 0; i < ids.length; i++) {
+            scatter_colors[i] = (ids[i] === selected_id) ? "red" : "#1f77b4";
+            scatter_size[i] = (ids[i] === selected_id) ? 8 : 4;
         }
-    }
 
-    if (hid>=0){
-        name.push(name.splice(hid,1)[0]);
-        type.push(type.splice(hid,1)[0]);
-        xs.push(xs.splice(hid,1)[0]);
-        ys.push(ys.splice(hid,1)[0]);
-        ids.push(ids.splice(hid,1)[0]);
-        data['id'] = new Int32Array(ids);
-        default_color.push(default_color.splice(hid,1)[0]);
-        line_color.push(line_color.splice(hid,1)[0]);
-        for (var i=0;i<color.length;i++){
-            color[i] = default_color[i];
-        }
-        color[color.length-1] = 'red';
-    } else {
-        color[color.length-1] = default_color[default_color.length-1];
-    }
-    source.change.emit()
-    """
+        scatter_source.change.emit();        
+        """
+    # enf of if file_list is not None
 
-    callback = CustomJS(args=dict(source=bokeh_plot.renderers[1].data_source), code=code)
-    inp.js_on_change("value", callback)
+    inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
+    inp.js_on_change("value", inp_callback)
 
     legend_div = Div(
         text="""
@@ -207,7 +340,7 @@ def make_msat_targets_map(
     """
     )
 
-    layout = Row(bokeh_plot, Column(inp, legend_div))
+    layout = Row(bokeh_plot, Column(inp, legend_div, fig))
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
