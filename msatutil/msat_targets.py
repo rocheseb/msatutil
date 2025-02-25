@@ -311,6 +311,11 @@ def make_msat_targets_map(
 
         scatter_source.change.emit();        
         """
+
+        creation_time_div = Div(
+            text=f"Last update: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
+            width=300,
+        )
     # enf of if file_list is not None
 
     inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
@@ -340,7 +345,10 @@ def make_msat_targets_map(
     """
     )
 
-    layout = Row(bokeh_plot, Column(inp, legend_div, fig))
+    if file_list is not None:
+        layout = Row(bokeh_plot, Column(inp, legend_div, fig, creation_time_div))
+    else:
+        layout = Row(bokeh_plot, Column(inp, legend_div))
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
