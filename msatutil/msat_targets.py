@@ -91,14 +91,23 @@ def make_msat_targets_map(
 
     gdf.loc[gdf["type"] == "Oil And Gas", "default_color"] = "purple"
     gdf.loc[gdf["type"] == "Agriculture", "default_color"] = "green"
-    gdf.loc[gdf["type"] == "CalVal", "default_color"] = "yellow"
+    gdf.loc[gdf["type"] == "CalVal", "default_color"] = "deepskyblue"
 
     gdf["fill_color"] = gdf["default_color"].copy()
     gdf["line_color"] = gdf["default_color"]
     gdf["fill_alpha"] = 0.7
     gdf["default_alpha"] = gdf["fill_alpha"]
 
-    vdims = ["id", "name", "type", "fill_color", "default_color", "line_color", "fill_alpha", "default_alpha"]
+    vdims = [
+        "id",
+        "name",
+        "type",
+        "fill_color",
+        "default_color",
+        "line_color",
+        "fill_alpha",
+        "default_alpha",
+    ]
     hover_tooltips = [
         ("id", "@id"),
         ("Name", "@name"),
@@ -334,7 +343,7 @@ def make_msat_targets_map(
         <span>Agriculture</span>
       </div>
       <div style="display:flex; align-items:center; margin-top:5px;">
-        <div style="width:15px; height:15px; background-color:yellow; margin-right:5px;"></div>
+        <div style="width:15px; height:15px; background-color:deepskyblue; margin-right:5px;"></div>
         <span>Cal/Val</span>
       </div>
       <div style="display:flex; align-items:center; margin-top:5px;">
