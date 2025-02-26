@@ -1,3 +1,4 @@
+import os
 import argparse
 import re
 from datetime import datetime
@@ -14,6 +15,7 @@ from bokeh.models import (
     HoverTool,
     Button,
     DateRangeSlider,
+    Select,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -40,6 +42,25 @@ def extract_timestamp(text: str) -> Optional[str]:
     if match:
         return pd.to_datetime(datetime.strptime(match.group(1), time_fmt), format=time_fmt)
     return None
+
+
+def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
+    """
+    Return the qaqc path corresponding to a L2 post-processed file
+
+    Input:
+        - l2pp_file_path (str): path to the L2 post-processed file
+    Ouputs:
+        - qaqc_file_path (str): path to the L2 qaqc file
+    """
+    l2pp_file_path = Path(l2pp_file_path)
+    qaqc_file_path = (
+        l2pp_file_path.parent
+        / "qaqc"
+        / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
+    )
+
+    return str(qaqc_file_path)
 
 
 def get_target_dict(file_list: str) -> dict:
@@ -117,19 +138,36 @@ def make_msat_targets_map(
 
     if file_list is not None:
         td = get_target_dict(file_list)
+        is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
         vdims += ["ncollections", "collections"]
         hover_tooltips += [("# Collects", "@ncollections")]
-        gdf["collections"] = ""
         gdf["ncollections"] = 0
-        scatter_df = pd.DataFrame(columns=["File", "id"])
+        gdf["collections"] = ""
+        scatter_df_columns = ["File", "id"]
+        if is_L2:
+            gdf["qaqc_files"] = ""
+            vdims += ["qaqc_files"]
+            scatter_df_columns += ["qaqc_file"]
+        scatter_df = pd.DataFrame(columns=scatter_df_columns)
         for t in td:
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
             )
             gdf.loc[gdf["id"] == t, "ncollections"] = len(list(td[t].keys()))
+            if is_L2:
+                gdf.loc[gdf["id"] == t, "qaqc_files"] = "\n".join(
+                    [derive_L2_qaqc_path(td[t][c][p]) for c in td[t] for p in td[t][c]]
+                )
             for c in td[t]:
                 for p in td[t][c]:
-                    scatter_df.loc[len(scatter_df)] = [td[t][c][p], t]
+                    if is_L2:
+                        scatter_df.loc[len(scatter_df)] = [
+                            td[t][c][p],
+                            t,
+                            derive_L2_qaqc_path(td[t][c][p]),
+                        ]
+                    else:
+                        scatter_df.loc[len(scatter_df)] = [td[t][c][p], t]
         gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "fill_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "fill_alpha"] = 0.5
@@ -164,6 +202,7 @@ def make_msat_targets_map(
 
     inp = NumericInput(value=None, title="Highlight this target id:")
 
+    # callback to highlight the polygon corresponding to the target in the input widget
     inp_callback_code = """
     var data = poly_source.data;
     var ids = Array.from(data['id']);
@@ -178,6 +217,9 @@ def make_msat_targets_map(
     var collections = data['collections'];
     var ncollections = Array.from(data['ncollections']);
     var alpha = Array.from(data['fill_alpha']);
+    if ('qaqc_files' in data){
+        var qaqc_files = data['qaqc_files'];
+    }
 
     var hid = -1;
     for (var i=0;i<ids.length;i++){
@@ -194,6 +236,7 @@ def make_msat_targets_map(
         ys.push(ys.splice(hid,1)[0]);
         ids.push(ids.splice(hid,1)[0]);
         collections.push(collections.splice(hid,1)[0]);
+        if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
         ncollections.push(ncollections.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
         data['ncollections'] = new Int32Array(ncollections);
@@ -228,18 +271,35 @@ def make_msat_targets_map(
 
     if file_list is not None:
         taptool = bokeh_plot.select_one(TapTool)
-
+        taptool_callback_args = {"poly_source": poly_source}
+        if is_L2:
+            file_type_select = Select(
+                options=["L2-pp", "QAQC plots"], value="L2-pp", title="File type"
+            )
+            taptool_callback_args["file_type_select"] = file_type_select
+        # callback to copy the corresponding files when clicking on a polygon
         taptool.callback = CustomJS(
-            args=dict(source=poly_source),
+            args=taptool_callback_args,
             code="""
-            const selected_indices = source.selected.indices;
+            const selected_indices = poly_source.selected.indices;
+            let key;
+            if (typeof file_type_select !== 'undefined'){
+                if (file_type_select.value==='L2-pp') {
+                    key = 'collections';
+                } else {
+                    key = 'qaqc_files';
+                }
+            } else {
+                key = 'collections';
+            }
+
             if (selected_indices.length > 0) {
                 let all_collections = [];
                 
                 // Loop over all selected polygons
                 for (let i = 0; i < selected_indices.length; i++) {
                     const idx = selected_indices[i];
-                    const collections = source.data['collections'][idx];
+                    const collections = poly_source.data[key][idx];
                     all_collections.push(collections);
                 }
                 
@@ -253,6 +313,8 @@ def make_msat_targets_map(
                     console.error('Failed to copy text: ', err);
                 });
             }
+            poly_source.selected.indices = [];
+            poly_source.change.emit();
         """,
         )
 
@@ -267,15 +329,28 @@ def make_msat_targets_map(
         scatter = fig.scatter(
             "timestamps", "cumulcounts", source=scatter_source, color="color", size="size"
         )
-        hover = HoverTool(tooltips=None, renderers=[scatter])
-        fig.add_tools(hover)
+        scatter_hover = HoverTool(tooltips=None, renderers=[scatter])
+        fig.add_tools(scatter_hover)
         scatter_taptool = fig.select_one(TapTool)
-
+        scatter_taptool_callback_args = {"scatter_source": scatter_source}
+        if is_L2:
+            scatter_taptool_callback_args["file_type_select"] = file_type_select
+        # callback to copy the corresponding file path when clicking on the scatter points
         scatter_taptool.callback = CustomJS(
-            args={"scatter_source": scatter_source, "inp": inp},
+            args=scatter_taptool_callback_args,
             code="""
             const selected = scatter_source.selected.indices;
-            const file_path = scatter_source.data["File"][selected[selected.length-1]];
+            let key;
+            if (typeof file_type_select !== 'undefined'){
+                if (file_type_select.value==='L2-pp') {
+                    key = 'File';
+                } else {
+                    key = 'qaqc_file';
+                }
+            } else {
+                key = 'File';
+            }
+            const file_path = scatter_source.data[key][selected[selected.length-1]];
 
             navigator.clipboard.writeText(file_path).then(function() {
                     alert('File path copied to clipboard:\\n' + file_path);
@@ -283,16 +358,16 @@ def make_msat_targets_map(
                     console.error('Failed to copy text: ', err);
                 });;
 
-            inp.value = scatter_source.data["id"][selected[selected.length-1]];
-
             scatter_source.selected.indices = [];
             scatter_source.change.emit()
 
             """,
         )
 
-        # CustomJS Callback to Highlight Polygons on Hover
-        hover.callback = CustomJS(
+        # CustomJS Callback to Highlight Polygons and scatter points on scatter Hover
+        # this does it by changing the value of the input widget, which triggers the input callback
+        # that will also highlight the corresponding scatter points
+        scatter_hover.callback = CustomJS(
             args=dict(scatter_source=scatter_source, inp=inp),
             code="""
             // Get hovered file from scatter
@@ -309,6 +384,7 @@ def make_msat_targets_map(
         )
 
         inp_callback_args["scatter_source"] = scatter_source
+        # callback to highlight scatter points corresponding to the target in the input widget
         inp_callback_code += """
         var scatter_colors = scatter_source.data["color"];
         var scatter_size = scatter_source.data["size"];
@@ -338,6 +414,7 @@ def make_msat_targets_map(
         date_slider_info_div = Div(
             text=f"{scatter_df['counts'].sum()} collects in selected date range", width=400
         )
+        # callback to update a text Div with the number of collects in the selected date range
         date_slider_callback = CustomJS(
             args={"info_div": date_slider_info_div, "scatter_source": scatter_source},
             code="""
@@ -350,13 +427,31 @@ def make_msat_targets_map(
         )
         date_slider.js_on_change("value_throttled", date_slider_callback)
         date_slider_button = Button(label="Copy collection paths in selected date range", width=300)
+        # callback to copy the files in the selected date range
+        date_slider_button_callback_args = {
+            "scatter_source": scatter_source,
+            "date_slider": date_slider,
+        }
+        if is_L2:
+            date_slider_button_callback_args["file_type_select"] = file_type_select
         date_slider_button.js_on_click(
             CustomJS(
-                args={"scatter_source": scatter_source, "date_slider": date_slider},
+                args=date_slider_button_callback_args,
                 code="""
             const timestamps = scatter_source.data["timestamps"];
             const ids = scatter_source.data["id"];
-            const paths = scatter_source.data["File"];
+            let key;
+            if (typeof file_type_select !== 'undefined'){
+                if (file_type_select.value==='L2-pp') {
+                    key = 'File';
+                } else {
+                    key = 'qaqc_file';
+                }
+            } else {
+                key = 'File';
+            }
+
+            const paths = scatter_source.data[key];
             const start = date_slider.value[0];
             const end = date_slider.value[1] + 86400000; // make the last date inclusive
             let selected_paths = [];
@@ -414,6 +509,7 @@ def make_msat_targets_map(
     )
 
     alpha_button = Button(label="Zero Polygon Alpha", button_type="warning")
+    # callback to change the alpha of the polygons
     alpha_button_callback = CustomJS(
         args={"poly_source": poly_source, "alpha_button": alpha_button},
         code="""
@@ -438,19 +534,35 @@ def make_msat_targets_map(
     alpha_button.js_on_click(alpha_button_callback)
 
     if file_list is not None:
-        layout = Row(
-            bokeh_plot,
-            Column(
-                inp,
-                legend_div,
-                fig,
-                date_slider,
-                date_slider_info_div,
-                date_slider_button,
-                creation_time_div,
-                alpha_button,
-            ),
-        )
+        if is_L2:
+            layout = Row(
+                bokeh_plot,
+                Column(
+                    inp,
+                    legend_div,
+                    fig,
+                    date_slider,
+                    date_slider_info_div,
+                    date_slider_button,
+                    file_type_select,
+                    creation_time_div,
+                    alpha_button,
+                ),
+            )
+        else:
+            layout = Row(
+                bokeh_plot,
+                Column(
+                    inp,
+                    legend_div,
+                    fig,
+                    date_slider,
+                    date_slider_info_div,
+                    date_slider_button,
+                    creation_time_div,
+                    alpha_button,
+                ),
+            )
     else:
         layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button))
 
