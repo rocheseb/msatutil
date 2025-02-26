@@ -89,7 +89,8 @@ def get_target_dict(file_list: str) -> dict:
             old_p = list(d[t][c].keys())[0]
             if p < old_p:
                 continue
-        d[t][c][p] = str(i).rstrip()
+        # pathlib.Path transforms // into /
+        d[t][c][p] = str(i).rstrip().replace("gs:/", "gs://")
 
     return d
 
