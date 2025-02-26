@@ -766,9 +766,15 @@ class msat_collection:
         elif use_corners:
             lon_str = "CornerLongitude" if not self.is_postproc else "longitude_bounds"
             lat_str = "CornerLatitude" if not self.is_postproc else "latitude_bounds"
-        else:
-            lon_str = "Longitude"
-            lat_str = "Latitude"
+        elif self.is_l2_met:
+            lon_str = "Level1/Longitude"
+            lat_str = "Level1/Latitude"
+        elif self.is_postproc:
+            lon_str = "geolocation/longitude"
+            lat_str = "geolocation/latitude"
+        elif self.is_l2:
+            lon_str = "Geolocation/Longitude"
+            lat_str = "Geolocation/Latitude"
 
         key = f"{list(ids.keys())}_{use_valid_xtrack}"
 
