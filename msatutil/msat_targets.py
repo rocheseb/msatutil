@@ -49,9 +49,9 @@ def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
     Return the qaqc path corresponding to a L2 post-processed file
 
     Input:
-        - l2pp_file_path (str): path to the L2 post-processed file
+        l2pp_file_path (str): path to the L2 post-processed file
     Ouputs:
-        - qaqc_file_path (str): path to the L2 qaqc file
+        qaqc_file_path (str): path to the L2 qaqc file
     """
     l2pp_file_path = Path(l2pp_file_path)
     qaqc_file_path = (
@@ -60,7 +60,30 @@ def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
         / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
     )
 
-    return str(qaqc_file_path)
+    # Path turns // into /
+    return str(qaqc_file_path).replace("gs:/", "gs://")
+
+
+def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
+    """
+    Return the image path corresponding to a L2 post-processed file
+    This will assume each
+
+    Input:
+        data_bucket_path (str): path to the L2 post-processed file
+        image_bucket (str): bucket path where the images are stored (start with gs://)
+    Ouputs:
+        image_file_path (str): path to the L2 qaqc file
+    """
+    data_bucket_path = Path(data_bucket_path)
+
+    image_file_path = (
+        Path(image_bucket)
+        / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
+    )
+
+    # Path turns // into /
+    return str(image_file_path).replace("gs:/", "gs://")
 
 
 def get_target_dict(file_list: str) -> dict:
@@ -100,6 +123,7 @@ def make_msat_targets_map(
     outfile: str,
     title: str = "MethaneSAT targets",
     file_list: Optional[str] = None,
+    image_bucket: Optional[str] = None,
 ):
     """
     Read the list of targets from the infile geojson file
@@ -149,6 +173,10 @@ def make_msat_targets_map(
             gdf["qaqc_files"] = ""
             vdims += ["qaqc_files"]
             scatter_df_columns += ["qaqc_file"]
+        if image_bucket is not None:
+            gdf["image_files"] = ""
+            vdims += ["image_files"]
+            scatter_df_columns += ["image_file"]
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
         for t in td:
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
@@ -159,16 +187,18 @@ def make_msat_targets_map(
                 gdf.loc[gdf["id"] == t, "qaqc_files"] = "\n".join(
                     [derive_L2_qaqc_path(td[t][c][p]) for c in td[t] for p in td[t][c]]
                 )
+            if image_bucket is not None:
+                gdf.loc[gdf["id"] == t, "image_files"] = "\n".join(
+                    [derive_image_path(td[t][c][p], image_bucket) for c in td[t] for p in td[t][c]]
+                )
             for c in td[t]:
                 for p in td[t][c]:
+                    columns = [td[t][c][p], t]
                     if is_L2:
-                        scatter_df.loc[len(scatter_df)] = [
-                            td[t][c][p],
-                            t,
-                            derive_L2_qaqc_path(td[t][c][p]),
-                        ]
-                    else:
-                        scatter_df.loc[len(scatter_df)] = [td[t][c][p], t]
+                        columns += [derive_L2_qaqc_path(td[t][c][p])]
+                    if image_bucket is not None:
+                        columns += [derive_image_path(td[t][c][p], image_bucket)]
+                    scatter_df.loc[len(scatter_df)] = columns
         gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "fill_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "fill_alpha"] = 0.5
@@ -218,9 +248,8 @@ def make_msat_targets_map(
     var collections = data['collections'];
     var ncollections = Array.from(data['ncollections']);
     var alpha = Array.from(data['fill_alpha']);
-    if ('qaqc_files' in data){
-        var qaqc_files = data['qaqc_files'];
-    }
+    if ('qaqc_files' in data) var qaqc_files = data['qaqc_files'];
+    if ('image_files' in data) var image_files = data['image_files'];
 
     var hid = -1;
     for (var i=0;i<ids.length;i++){
@@ -238,6 +267,7 @@ def make_msat_targets_map(
         ids.push(ids.splice(hid,1)[0]);
         collections.push(collections.splice(hid,1)[0]);
         if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
+        if ('image_files' in data) image_files.push(image_files.splice(hid,1)[0]);
         ncollections.push(ncollections.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
         data['ncollections'] = new Int32Array(ncollections);
@@ -273,9 +303,14 @@ def make_msat_targets_map(
     if file_list is not None:
         taptool = bokeh_plot.select_one(TapTool)
         taptool_callback_args = {"poly_source": poly_source}
+        file_type_select_options = ["Data"]
         if is_L2:
+            file_type_select_options += ["QAQC Plots"]
+        if image_bucket is not None:
+            file_type_select_options += ["Images"]
+        if is_L2 or image_bucket is not None:
             file_type_select = Select(
-                options=["L2-pp", "QAQC plots"], value="L2-pp", title="File type"
+                options=file_type_select_options, value="Data", title="File type"
             )
             taptool_callback_args["file_type_select"] = file_type_select
         # callback to copy the corresponding files when clicking on a polygon
@@ -285,10 +320,12 @@ def make_msat_targets_map(
             const selected_indices = poly_source.selected.indices;
             let key;
             if (typeof file_type_select !== 'undefined'){
-                if (file_type_select.value==='L2-pp') {
+                if (file_type_select.value==='Data') {
                     key = 'collections';
-                } else {
+                } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_files';
+                } else {
+                    key = 'image_files';
                 }
             } else {
                 key = 'collections';
@@ -334,7 +371,7 @@ def make_msat_targets_map(
         fig.add_tools(scatter_hover)
         scatter_taptool = fig.select_one(TapTool)
         scatter_taptool_callback_args = {"scatter_source": scatter_source}
-        if is_L2:
+        if is_L2 or image_bucket is not None:
             scatter_taptool_callback_args["file_type_select"] = file_type_select
         # callback to copy the corresponding file path when clicking on the scatter points
         scatter_taptool.callback = CustomJS(
@@ -343,10 +380,12 @@ def make_msat_targets_map(
             const selected = scatter_source.selected.indices;
             let key;
             if (typeof file_type_select !== 'undefined'){
-                if (file_type_select.value==='L2-pp') {
+                if (file_type_select.value==='Data') {
                     key = 'File';
-                } else {
+                } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_file';
+                } else {
+                    key = 'image_file';
                 }
             } else {
                 key = 'File';
@@ -399,11 +438,6 @@ def make_msat_targets_map(
         scatter_source.change.emit();        
         """
 
-        creation_time_div = Div(
-            text=f"Last update: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
-            width=300,
-        )
-
         start = scatter_df["timestamps"][0].date()
         end = scatter_df["timestamps"][len(scatter_df.index) - 1].date()
         date_slider = DateRangeSlider(
@@ -433,7 +467,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "date_slider": date_slider,
         }
-        if is_L2:
+        if is_L2 or image_bucket is not None:
             date_slider_button_callback_args["file_type_select"] = file_type_select
         date_slider_button.js_on_click(
             CustomJS(
@@ -443,10 +477,12 @@ def make_msat_targets_map(
             const ids = scatter_source.data["id"];
             let key;
             if (typeof file_type_select !== 'undefined'){
-                if (file_type_select.value==='L2-pp') {
+                if (file_type_select.value==='Data') {
                     key = 'File';
-                } else {
+                } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_file';
+                } else {
+                    key = 'image_file';
                 }
             } else {
                 key = 'File';
@@ -534,8 +570,13 @@ def make_msat_targets_map(
     )
     alpha_button.js_on_click(alpha_button_callback)
 
+    creation_time_div = Div(
+        text=f"Last update: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
+        width=300,
+    )
+
     if file_list is not None:
-        if is_L2:
+        if is_L2 or image_bucket is not None:
             layout = Row(
                 bokeh_plot,
                 Column(
@@ -546,8 +587,8 @@ def make_msat_targets_map(
                     date_slider_info_div,
                     date_slider_button,
                     file_type_select,
-                    creation_time_div,
                     alpha_button,
+                    creation_time_div,
                 ),
             )
         else:
@@ -560,12 +601,12 @@ def make_msat_targets_map(
                     date_slider,
                     date_slider_info_div,
                     date_slider_button,
-                    creation_time_div,
                     alpha_button,
+                    creation_time_div,
                 ),
             )
     else:
-        layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button))
+        layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button, creation_time_div))
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
@@ -582,9 +623,15 @@ def main():
         default=None,
         help="full path to a list of bucket path, the collections file paths will be added to the targets hover tooltips",
     )
+    parser.add_argument(
+        "-i",
+        "--image-bucket",
+        default=None,
+        help="full path to the bucket where the collect pngs are stored",
+    )
     args = parser.parse_args()
 
-    make_msat_targets_map(args.infile, args.outfile, args.title, args.file_list)
+    make_msat_targets_map(args.infile, args.outfile, args.title, args.file_list, args.image_bucket)
 
 
 if __name__ == "__main__":
