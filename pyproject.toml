@@ -58,6 +58,7 @@ find = {namespaces = false}
 mairhtml = "msatutil.mair_geoviews:main"
 mairls = "msatutil.mair_ls:main"
 msattargets = "msatutil.msat_targets:main"
+msatimages = "msatutil.msat_images:main"
 
 [tool.setuptools_scm]
 write_to = "msatutil/_version.py"
