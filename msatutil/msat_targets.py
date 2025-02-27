@@ -5,6 +5,7 @@ from datetime import datetime
 import holoviews as hv
 import geoviews as gv
 from bokeh.models import (
+    TextInput,
     NumericInput,
     CustomJS,
     Row,
@@ -164,10 +165,11 @@ def make_msat_targets_map(
     if file_list is not None:
         td = get_target_dict(file_list)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
-        vdims += ["ncollections", "collections"]
-        hover_tooltips += [("# Collects", "@ncollections")]
+        vdims += ["ncollections", "collections", "target_code"]
+        hover_tooltips += [("# Collects", "@ncollections"), ("target code", "@target_code")]
         gdf["ncollections"] = 0
         gdf["collections"] = ""
+        gdf["target_code"] = "***"
         scatter_df_columns = ["File", "id"]
         if is_L2:
             gdf["qaqc_files"] = ""
@@ -178,6 +180,10 @@ def make_msat_targets_map(
             vdims += ["image_files"]
             scatter_df_columns += ["image_file"]
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
+        # a collection ID has 8 characters
+        # characters 4-6 correspond to a specific target
+        # id_code_map maps these 3 characters to the corresponding target id
+        id_code_map = {}
         for t in td:
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
@@ -191,6 +197,9 @@ def make_msat_targets_map(
                 gdf.loc[gdf["id"] == t, "image_files"] = "\n".join(
                     [derive_image_path(td[t][c][p], image_bucket) for c in td[t] for p in td[t][c]]
                 )
+            id_code = list(td[t].keys())[0][4:-1]
+            gdf.loc[gdf["id"] == t, "target_code"] = id_code
+            id_code_map[id_code] = t
             for c in td[t]:
                 for p in td[t][c]:
                     columns = [td[t][c][p], t]
@@ -237,6 +246,7 @@ def make_msat_targets_map(
     inp_callback_code = """
     var data = poly_source.data;
     var ids = Array.from(data['id']);
+    var target_code = data['target_code'];
     var selected_id = cb_obj.value;
     var color = data['fill_color'];
     var default_color = data['default_color'];
@@ -248,6 +258,7 @@ def make_msat_targets_map(
     var collections = data['collections'];
     var ncollections = Array.from(data['ncollections']);
     var alpha = Array.from(data['fill_alpha']);
+    var default_alpha = Array.from(data['default_alpha']);
     if ('qaqc_files' in data) var qaqc_files = data['qaqc_files'];
     if ('image_files' in data) var image_files = data['image_files'];
 
@@ -265,6 +276,7 @@ def make_msat_targets_map(
         xs.push(xs.splice(hid,1)[0]);
         ys.push(ys.splice(hid,1)[0]);
         ids.push(ids.splice(hid,1)[0]);
+        target_code.push(target_code.splice(hid,1)[0]);
         collections.push(collections.splice(hid,1)[0]);
         if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
         if ('image_files' in data) image_files.push(image_files.splice(hid,1)[0]);
@@ -272,6 +284,7 @@ def make_msat_targets_map(
         alpha.push(alpha.splice(hid,1)[0]);
         data['ncollections'] = new Int32Array(ncollections);
         data['fill_alpha'] = new Float32Array(alpha);
+        data['default_alpha'] = new Float32Array(default_alpha);
         data['id'] = new Int32Array(ids);
         default_color.push(default_color.splice(hid,1)[0]);
         line_color.push(line_color.splice(hid,1)[0]);
@@ -279,13 +292,29 @@ def make_msat_targets_map(
             color[i] = default_color[i];
         }
         color[color.length-1] = 'red';
+        alpha[alpha.length-1] = 1;
     } else {
         color[color.length-1] = default_color[default_color.length-1];
+        alpha[alpha.length-1] = default_alpha[default_alpha.length-1];
     }
     poly_source.change.emit();
     """
 
     inp_callback_args = {"poly_source": poly_source}
+
+    target_code_div = Div(text="Target ID:", width=300)
+    target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
+    target_code_inp.js_on_change(
+        "value",
+        CustomJS(
+            args={"id_code_map": id_code_map, "target_code_div": target_code_div},
+            code="""
+            target_code_div.text = id_code_map[cb_obj.value] !== undefined 
+                ? 'Target ID: ' + id_code_map[cb_obj.value] 
+                : 'No collects with this code';
+            """,
+        ),
+    )
 
     poly_hover = bokeh_plot.select_one(HoverTool)
     poly_hover.callback = CustomJS(
@@ -581,7 +610,7 @@ def make_msat_targets_map(
                 bokeh_plot,
                 Column(
                     inp,
-                    legend_div,
+                    Row(legend_div, Column(target_code_inp, target_code_div)),
                     fig,
                     date_slider,
                     date_slider_info_div,
@@ -596,7 +625,7 @@ def make_msat_targets_map(
                 bokeh_plot,
                 Column(
                     inp,
-                    legend_div,
+                    Row(legend_div, Column(target_code_inp, target_code_div)),
                     fig,
                     date_slider,
                     date_slider_info_div,

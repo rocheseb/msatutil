@@ -23,7 +23,7 @@ dependencies = [
     "netcdf4",
     "matplotlib",
     "pandas",
-    "scipy",
+    "scipy==1.12.0",
     "tqdm",
     "google-cloud-storage",
     "pyogrio",
