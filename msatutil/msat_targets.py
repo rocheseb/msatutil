@@ -282,6 +282,7 @@ def make_msat_targets_map(
         if ('image_files' in data) image_files.push(image_files.splice(hid,1)[0]);
         ncollections.push(ncollections.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
+        default_alpha.push(default_alpha.splice(hid,1)[0]);
         data['ncollections'] = new Int32Array(ncollections);
         data['fill_alpha'] = new Float32Array(alpha);
         data['default_alpha'] = new Float32Array(default_alpha);
@@ -290,12 +291,13 @@ def make_msat_targets_map(
         line_color.push(line_color.splice(hid,1)[0]);
         for (var i=0;i<color.length;i++){
             color[i] = default_color[i];
+            data['fill_alpha'][i] = data['default_alpha'][i];
         }
         color[color.length-1] = 'red';
-        alpha[alpha.length-1] = 1;
+        data['fill_alpha'][alpha.length-1] = 1;
     } else {
         color[color.length-1] = default_color[default_color.length-1];
-        alpha[alpha.length-1] = default_alpha[default_alpha.length-1];
+        data['fill_alpha'][alpha.length-1] = data['default_alpha'][default_alpha.length-1];
     }
     poly_source.change.emit();
     """
