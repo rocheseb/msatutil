@@ -241,6 +241,9 @@ def make_msat_targets_map(
     poly_source = bokeh_plot.renderers[1].data_source
 
     inp = NumericInput(value=None, title="Highlight this target id:")
+    # will use to distinguish between the inp callback being triggered "manually"
+    # or from another callback
+    manual_source = ColumnDataSource(data={"flag": [True]})
 
     # callback to highlight the polygon corresponding to the target in the input widget
     inp_callback_code = """
@@ -300,9 +303,29 @@ def make_msat_targets_map(
         data['fill_alpha'][alpha.length-1] = data['default_alpha'][default_alpha.length-1];
     }
     poly_source.change.emit();
+    // if the input widget is entered manually, reset the plot
+    if (manual_source.data["flag"][0]) {
+        //plot.reset.emit();
+        var x = poly_source.data["xs"][xs.length-1][0][0];
+        var y = poly_source.data["ys"][ys.length-1][0][0];
+        const mean = arr => arr.reduce((sum, val) => sum + val, 0) / arr.length;
+        const x_offset = 3300000; //0;
+        const y_offset = 2400000; //0;
+        const mean_x = mean(x);
+        const mean_y = mean(y);
+        plot.x_range.setv({start: mean_x - x_offset, end:  mean_x + x_offset});
+        plot.y_range.setv({start: mean_y - y_offset, end: mean_y + y_offset});
+    } else {
+        manual_source.data["flag"][0] = true;
+        manual_source.change.emit();
+    }
     """
 
-    inp_callback_args = {"poly_source": poly_source}
+    inp_callback_args = {
+        "poly_source": poly_source,
+        "manual_source": manual_source,
+        "plot": bokeh_plot,
+    }
 
     target_code_div = Div(text="Target ID:", width=300)
     target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
@@ -320,12 +343,14 @@ def make_msat_targets_map(
 
     poly_hover = bokeh_plot.select_one(HoverTool)
     poly_hover.callback = CustomJS(
-        args={"inp": inp, "poly_source": poly_source},
+        args={"inp": inp, "poly_source": poly_source, "manual_source": manual_source},
         code="""
         const selected = cb_data["index"].indices;
 
         if (selected.length>0) {
             const index = selected[selected.length-1];
+            manual_source.data["flag"][0] = false;
+            manual_source.change.emit();
             inp.value = poly_source.data["id"][index];
         }
         """,
@@ -439,7 +464,7 @@ def make_msat_targets_map(
         # this does it by changing the value of the input widget, which triggers the input callback
         # that will also highlight the corresponding scatter points
         scatter_hover.callback = CustomJS(
-            args=dict(scatter_source=scatter_source, inp=inp),
+            args={"scatter_source": scatter_source, "inp": inp, "manual_source": manual_source},
             code="""
             // Get hovered file from scatter
             const hovered_indices = cb_data["index"].indices;
@@ -448,6 +473,8 @@ def make_msat_targets_map(
             if (hovered_indices.length>0){
                 const hovered_index = hovered_indices[hovered_indices.length-1];
                 const target_id = scatter_source.data["id"][hovered_index];
+                manual_source.data["flag"][0] = false;
+                manual_source.change.emit();
                 inp.value = target_id;
             } 
 
