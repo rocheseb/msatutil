@@ -1,4 +1,3 @@
-import os
 import argparse
 import re
 from datetime import datetime
@@ -68,7 +67,7 @@ def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
 def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
     """
     Return the image path corresponding to a L2 post-processed file
-    This will assume each
+    This will assume each L2 file has an existing corresponding image file.
 
     Input:
         data_bucket_path (str): path to the L2 post-processed file
