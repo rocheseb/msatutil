@@ -346,11 +346,12 @@ def make_msat_targets_map(
         args={"inp": inp, "poly_source": poly_source},
         code="""
         const selected = cb_data["index"].indices;
+        const index = selected[selected.length-1];
+        const target_id = poly_source.data["id"][index];
 
-        if (selected.length>0) {
-            const index = selected[selected.length-1];
+        if (selected.length>0 && inp.value!=target_id) {
             window.manual_input = 0;
-            inp.value = poly_source.data["id"][index];
+            inp.value = target_id;
         }
         """,
     )
@@ -468,14 +469,13 @@ def make_msat_targets_map(
             // Get hovered file from scatter
             const hovered_indices = cb_data["index"].indices;
             const scatter_data = scatter_source.data;
-
-            if (hovered_indices.length>0){
-                const hovered_index = hovered_indices[hovered_indices.length-1];
-                const target_id = scatter_source.data["id"][hovered_index];
+            const hovered_index = hovered_indices[hovered_indices.length-1];
+            const target_id = scatter_source.data["id"][hovered_index];
+            
+            if (hovered_indices.length>0 && inp.value!=target_id){
                 window.manual_input = 0;
                 inp.value = target_id;
             } 
-
             """,
         )
 
