@@ -243,8 +243,8 @@ def make_msat_targets_map(
 
     # callback to highlight the polygon corresponding to the target in the input widget
     inp_callback_code = """
-    if (typeof window.manual_input === "undefined") {
-        window.manual_input = 1;
+    if (typeof window.zoom_input === "undefined") {
+        window.zoom_input = 1;
     }
 
     var data = poly_source.data;
@@ -305,7 +305,7 @@ def make_msat_targets_map(
     poly_source.change.emit();
 
     // if the input widget is entered manually, reset the plot
-    if (window.manual_input==1) {
+    if (window.zoom_input==1) {
         //plot.reset.emit();
         var x = poly_source.data["xs"][xs.length-1][0][0];
         var y = poly_source.data["ys"][ys.length-1][0][0];
@@ -317,7 +317,7 @@ def make_msat_targets_map(
         plot.x_range.setv({start: mean_x - x_offset, end:  mean_x + x_offset});
         plot.y_range.setv({start: mean_y - y_offset, end: mean_y + y_offset});
     } else {
-        window.manual_input = 1;
+        window.zoom_input = 1;
     }
     """
 
@@ -349,7 +349,7 @@ def make_msat_targets_map(
         const target_id = poly_source.data["id"][index];
 
         if (selected.length>0 && inp.value!=target_id) {
-            window.manual_input = 0;
+            window.zoom_input = 0;
             inp.value = target_id;
         }
         """,
@@ -472,7 +472,6 @@ def make_msat_targets_map(
             const target_id = scatter_source.data["id"][hovered_index];
             
             if (hovered_indices.length>0 && inp.value!=target_id){
-                window.manual_input = 0;
                 inp.value = target_id;
             } 
             """,
