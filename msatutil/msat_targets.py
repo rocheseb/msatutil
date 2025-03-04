@@ -24,6 +24,7 @@ import pandas as pd
 import geopandas as gpd
 from typing import Optional
 from pathlib import Path
+import reverse_geocode
 
 gv.extension("bokeh")
 
@@ -118,6 +119,23 @@ def get_target_dict(file_list: str) -> dict:
     return d
 
 
+def get_country(lat: float, lon: float) -> Optional[str]:
+    """
+    Get the country corresponding to the given lat/lon
+
+    Inputs:
+        lat (float): latitude
+        lon (float): longitude
+    Outputs:
+        country (Optional[str]): the country name
+    """
+    try:
+        country = reverse_geocode.get((lat, lon))["country"]
+    except Exception:
+        country = None
+    return country
+
+
 def make_msat_targets_map(
     infile: str,
     outfile: str,
@@ -136,14 +154,18 @@ def make_msat_targets_map(
     """
     gdf = gpd.read_file(infile)
 
+    gdf["country"] = gdf.apply(
+        lambda row: get_country(row["centroid_lat"], row["centroid_lon"]), axis=1
+    )
+
     gdf.loc[gdf["type"] == "Oil And Gas", "default_color"] = "purple"
     gdf.loc[gdf["type"] == "Agriculture", "default_color"] = "green"
     gdf.loc[gdf["type"] == "CalVal", "default_color"] = "deepskyblue"
 
     gdf["fill_color"] = gdf["default_color"].copy()
-    gdf["line_color"] = gdf["default_color"]
+    gdf["line_color"] = gdf["default_color"].copy()
     gdf["fill_alpha"] = 0.7
-    gdf["default_alpha"] = gdf["fill_alpha"]
+    gdf["default_alpha"] = gdf["fill_alpha"].copy()
 
     vdims = [
         "id",
@@ -154,10 +176,12 @@ def make_msat_targets_map(
         "line_color",
         "fill_alpha",
         "default_alpha",
+        "country",
     ]
     hover_tooltips = [
         ("id", "@id"),
         ("Name", "@name"),
+        ("Country", "@country"),
         ("Type", "@type"),
     ]
 
@@ -219,6 +243,7 @@ def make_msat_targets_map(
         scatter_df["cumulcounts"] = scatter_df["counts"].cumsum()
         scatter_df["color"] = "#1f77b4"
         scatter_df["size"] = 4
+    # end of if file_list is not None
 
     base_map = gv.tile_sources.EsriImagery()
     polygons = gv.Polygons(gdf, vdims=vdims)
@@ -249,7 +274,7 @@ def make_msat_targets_map(
 
     var data = poly_source.data;
     var ids = Array.from(data['id']);
-    var target_code = data['target_code'];
+    var country = data['country'];
     var selected_id = cb_obj.value;
     var color = data['fill_color'];
     var default_color = data['default_color'];
@@ -258,10 +283,11 @@ def make_msat_targets_map(
     var ys = data['ys'];
     var name = data['name'];
     var type = data['type'];
-    var collections = data['collections'];
-    var ncollections = Array.from(data['ncollections']);
     var alpha = Array.from(data['fill_alpha']);
     var default_alpha = Array.from(data['default_alpha']);
+    if ('collections' in data) var collections = data['collections'];
+    if ('ncollections' in data) var ncollections = Array.from(data['ncollections']);
+    if ('target_code' in data) var target_code = data['target_code'];
     if ('qaqc_files' in data) var qaqc_files = data['qaqc_files'];
     if ('image_files' in data) var image_files = data['image_files'];
 
@@ -279,14 +305,17 @@ def make_msat_targets_map(
         xs.push(xs.splice(hid,1)[0]);
         ys.push(ys.splice(hid,1)[0]);
         ids.push(ids.splice(hid,1)[0]);
-        target_code.push(target_code.splice(hid,1)[0]);
-        collections.push(collections.splice(hid,1)[0]);
+        country.push(country.splice(hid,1)[0]);
+        if ('collections' in data) collections.push(collections.splice(hid,1)[0]);
+        if ('target_code' in data) target_code.push(target_code.splice(hid,1)[0]);
+        if ('ncollections' in data) {
+            ncollections.push(ncollections.splice(hid,1)[0]);
+            data['ncollections'] = new Int32Array(ncollections);
+        }
         if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
         if ('image_files' in data) image_files.push(image_files.splice(hid,1)[0]);
-        ncollections.push(ncollections.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
         default_alpha.push(default_alpha.splice(hid,1)[0]);
-        data['ncollections'] = new Int32Array(ncollections);
         data['fill_alpha'] = new Float32Array(alpha);
         data['default_alpha'] = new Float32Array(default_alpha);
         data['id'] = new Int32Array(ids);
@@ -326,20 +355,6 @@ def make_msat_targets_map(
         "plot": bokeh_plot,
     }
 
-    target_code_div = Div(text="Target ID:", width=300)
-    target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
-    target_code_inp.js_on_change(
-        "value",
-        CustomJS(
-            args={"id_code_map": id_code_map, "target_code_div": target_code_div},
-            code="""
-            target_code_div.text = id_code_map[cb_obj.value] !== undefined 
-                ? 'Target ID: ' + id_code_map[cb_obj.value] 
-                : 'No collects with this code';
-            """,
-        ),
-    )
-
     poly_hover = bokeh_plot.select_one(HoverTool)
     poly_hover.callback = CustomJS(
         args={"inp": inp, "poly_source": poly_source},
@@ -356,6 +371,20 @@ def make_msat_targets_map(
     )
 
     if file_list is not None:
+        target_code_div = Div(text="Target ID:", width=300)
+        target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
+        target_code_inp.js_on_change(
+            "value",
+            CustomJS(
+                args={"id_code_map": id_code_map, "target_code_div": target_code_div},
+                code="""
+                target_code_div.text = id_code_map[cb_obj.value] !== undefined 
+                    ? 'Target ID: ' + id_code_map[cb_obj.value] 
+                    : 'No collects with this code';
+                """,
+            ),
+        )
+
         taptool = bokeh_plot.select_one(TapTool)
         taptool_callback_args = {"poly_source": poly_source}
         file_type_select_options = ["Data"]
@@ -365,7 +394,7 @@ def make_msat_targets_map(
             file_type_select_options += ["Images"]
         if is_L2 or image_bucket is not None:
             file_type_select = Select(
-                options=file_type_select_options, value="Data", title="File type"
+                options=file_type_select_options, value="Data", title="File type:"
             )
             taptool_callback_args["file_type_select"] = file_type_select
         # callback to copy the corresponding files when clicking on a polygon
@@ -629,6 +658,36 @@ def make_msat_targets_map(
         width=300,
     )
 
+    country_div = Div(text="Target IDs in selected country:", width=300)
+    country_input = Select(
+        value=None, options=sorted(list(set(gdf["country"]))), width=200, title="Get Target IDs in:"
+    )
+    country_input.js_on_change(
+        "value",
+        CustomJS(
+            args={"country_div": country_div, "poly_source": poly_source},
+            code="""
+        const countries = poly_source.data["country"];
+        const ids = poly_source.data["id"];
+        const ids_in_country = ids.filter((_, i) => countries[i] === cb_obj.value);
+        // Break ids_in_country into chunks of 10
+        function chunkArray(array, chunkSize) {
+            const chunks = [];
+            for (let i = 0; i < array.length; i += chunkSize) {
+                chunks.push(array.slice(i, i + chunkSize));
+            }
+            return chunks;
+        }
+
+        // Convert each chunk to a string and join with line breaks
+        const formattedText = chunkArray(ids_in_country, 10)
+            .map(chunk => chunk.join(", "))
+            .join("<br>");
+        country_div.text = ids_in_country.length + " target IDs in selected country:<br>"+formattedText;
+        """,
+        ),
+    )
+
     if file_list is not None:
         if is_L2 or image_bucket is not None:
             layout = Row(
@@ -642,6 +701,8 @@ def make_msat_targets_map(
                     date_slider_button,
                     file_type_select,
                     alpha_button,
+                    country_input,
+                    country_div,
                     creation_time_div,
                 ),
             )
@@ -656,11 +717,16 @@ def make_msat_targets_map(
                     date_slider_info_div,
                     date_slider_button,
                     alpha_button,
+                    country_input,
+                    country_div,
                     creation_time_div,
                 ),
             )
     else:
-        layout = Row(bokeh_plot, Column(inp, legend_div, alpha_button, creation_time_div))
+        layout = Row(
+            bokeh_plot,
+            Column(inp, legend_div, alpha_button, country_input, country_div, creation_time_div),
+        )
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
