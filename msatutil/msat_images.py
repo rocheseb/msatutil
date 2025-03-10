@@ -1,10 +1,35 @@
 import os
 import argparse
+import numpy as np
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 from msatutil.msat_interface import msat_collection
 from msatutil.msat_targets import get_target_dict
+
+
+def select_colorscale(mc: msat_collection) -> tuple[float, float]:
+    """
+    Get the vmin and vmax that will be used for the XCH4 plot
+    """
+    xch4 = mc.pmesh_prep("product_co2proxy/xch4_co2proxy", use_valid_xtrack=True).compute()
+    if mc.is_postproc:
+        flag = mc.pmesh_prep("product_co2proxy/main_quality_flag", use_valid_xtrack=True).compute()
+    else:
+        flag = np.zeros(xch4.shape)
+
+    med = np.nanmedian(xch4[flag == 0])
+    std = np.nanstd(xch4[flag == 0], ddof=1)
+
+    STD_THRESHOLD = 65  # ppb
+    if std > STD_THRESHOLD:
+        vmin = med - 2 * STD_THRESHOLD
+        vmax = med + 2 * STD_THRESHOLD
+    else:
+        vmin = med - 2 * std
+        vmax = med + 2 * std
+
+    return vmin, vmax
 
 
 def plot_l1(l1_file, outfile, title="", add_basemap=False, dpi=300):
@@ -43,13 +68,14 @@ def plot_l2(l2_file, outfile, title="", flagged=False, add_basemap=False, dpi=30
         flag = l2.pmesh_prep("product_co2proxy/main_quality_flag", use_valid_xtrack=True).compute()
     fig, ax = plt.subplots(1, 2, figsize=(11, 8), dpi=dpi, constrained_layout=True, sharey=True)
     ax[0].set_facecolor("black")
+    vmin, vmax = select_colorscale(l2)
     l2.heatmap(
-        "xch4",
+        "product_co2proxy/xch4_co2proxy",
         latlon=True,
         ax=ax[0],
         colorbar_label="XCH$_4$ (ppb)",
-        vmin=1850,
-        vmax=2100,
+        vmin=vmin,
+        vmax=vmax,
         over=None,
         under=None,
         latlon_padding=0.2,
@@ -88,13 +114,14 @@ def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
     l3 = msat_collection([l3_file])
     fig, ax = plt.subplots(1, 2, figsize=(11, 8), dpi=dpi, sharey=True, constrained_layout=True)
     ax[0].set_facecolor("black")
+    vmin, vmax = select_colorscale(l3)
     l3.heatmap(
         "xch4",
         latlon=True,
         ax=ax[0],
         colorbar_label="XCH$_4$ (ppb)",
-        vmin=1850,
-        vmax=2100,
+        vmin=vmin,
+        vmax=vmax,
         over=None,
         under=None,
         latlon_padding=0.2,
