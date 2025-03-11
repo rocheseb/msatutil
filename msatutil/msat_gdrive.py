@@ -42,24 +42,23 @@ def upload_file(
     filename = os.path.basename(outfile)
 
     # check if file already exists
-    if not overwrite:
-        query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
-        results = (
-            drive_service.files()
-            .list(
-                q=query,
-                fields="files(id, name)",
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-                corpora="allDrives",
-            )
-            .execute()
+    query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
+    results = (
+        drive_service.files()
+        .list(
+            q=query,
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+            corpora="allDrives",
         )
-        files = results.get("files", [])
+        .execute()
+    )
+    files = results.get("files", [])
 
-        # If the file already exists, return the file ID
-        if files:
-            return f"https://drive.google.com/uc?export=view&id={files[0]['id']}"
+    # If the file already exists, return the file ID
+    if files and not overwrite:
+        return f"https://drive.google.com/uc?export=view&id={files[0]['id']}"
 
     file_metadata = {
         "name": filename,
@@ -72,17 +71,25 @@ def upload_file(
 
     media = MediaFileUpload(outfile, mimetype=mimetype)
 
-    uploaded_file = (
-        drive_service.files()
-        .create(
-            body=file_metadata,
+    if files:
+        file_id = files[0]["id"]
+        drive_service.files().update(
+            fileId=file_id,
             media_body=media,
-            fields="id",
             supportsAllDrives=True,
+        ).execute()
+    else:
+        uploaded_file = (
+            drive_service.files()
+            .create(
+                body=file_metadata,
+                media_body=media,
+                fields="id",
+                supportsAllDrives=True,
+            )
+            .execute()
         )
-        .execute()
-    )
-    file_id = uploaded_file["id"]
+        file_id = uploaded_file["id"]
 
     return f"https://drive.google.com/uc?export=view&id={file_id}"
 
