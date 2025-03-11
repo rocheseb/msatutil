@@ -6,6 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from msatutil.msat_interface import msat_collection
 from msatutil.msat_targets import get_target_dict
+from msatutil.msat_gdrive import upload_file as google_drive_upload
 
 
 def select_colorscale(mc: msat_collection) -> tuple[float, float]:
@@ -179,6 +180,16 @@ def main():
         help="upload bucket path (starts with gs://)",
     )
     parser.add_argument(
+        "-s",
+        "--service-account-file",
+        help="full path to the Google service account json file",
+    )
+    parser.add_argument(
+        "-g",
+        "--google-drive-id",
+        help="Google Drive ID of the upload folder",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="if given, remake all images even if they already exist",
@@ -231,6 +242,16 @@ def main():
         os.system(f"gsutil -m cp {args.out_dir}/*.png {args.bucket}/")
     else:
         os.system(f"gsutil -m cp -n {args.out_dir}/*.png {args.bucket}/")
+
+    if args.google_drive_id is not None and args.service_account_file is not None:
+        outfile_list = [os.path.join(args.out_dir, i) for i in os.listdir(args.out_dir)]
+        for outfile in outfile_list:
+            google_drive_upload(
+                outfile,
+                args.service_account_file,
+                args.google_drive_id,
+                args.overwrite,
+            )
 
 
 if __name__ == "__main__":
