@@ -69,7 +69,7 @@ def upload_file(
     if mimetype is None:
         mimetype = "plain/text"
 
-    media = MediaFileUpload(outfile, mimetype=mimetype)
+    media = MediaFileUpload(outfile, mimetype=mimetype, resumable=True)
 
     if files:
         file_id = files[0]["id"]
