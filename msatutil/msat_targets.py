@@ -22,9 +22,10 @@ from bokeh.resources import CDN
 from bokeh.plotting import figure
 import pandas as pd
 import geopandas as gpd
-from typing import Optional
-from pathlib import Path
+from typing import Optional, Callable
+from pathlib import Path, PosixPath
 import reverse_geocode
+from msatutil.msat_gdrive import get_file_link
 
 gv.extension("bokeh")
 
@@ -61,20 +62,19 @@ def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
         / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
     )
 
-    # Path turns // into /
-    return str(qaqc_file_path).replace("gs:/", "gs://")
+    return gs_posixpath_to_str(qaqc_file_path)
 
 
 def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
     """
-    Return the image path corresponding to a L2 post-processed file
-    This will assume each L2 file has an existing corresponding image file.
+    Return the image path corresponding to a .nc data file
+    This will assume each data file has an existing corresponding image file.
 
     Input:
-        data_bucket_path (str): path to the L2 post-processed file
+        data_bucket_path (str): path to the data file
         image_bucket (str): bucket path where the images are stored (start with gs://)
     Ouputs:
-        image_file_path (str): path to the L2 qaqc file
+        image_file_path (str): path to the image file
     """
     data_bucket_path = Path(data_bucket_path)
 
@@ -83,16 +83,52 @@ def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
         / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
     )
 
-    # Path turns // into /
-    return str(image_file_path).replace("gs:/", "gs://")
+    return gs_posixpath_to_str(image_file_path)
 
 
-def get_target_dict(file_list: str) -> dict:
+def derive_image_drive_link(
+    data_bucket_path: str,
+    service_account_file: str,
+    google_drive_id: str,
+) -> str:
+    """
+    Get google drive link for the given
+    Input:
+        data_bucket_path (str): path to the data file
+        service_account_file (str): full path to the Google Drive API service account file
+        google_drive_id (str): Google Drive folder ID, must have been shared with the service account
+    Outputs:
+        image_link (str): link to the image on the Google Drive
+    """
+    data_bucket_path = Path(str(data_bucket_path).rstrip())
+    image_name = f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
+
+    image_link = get_file_link(service_account_file, google_drive_id, image_name)
+
+    return image_link
+
+
+def gs_posixpath_to_str(p: PosixPath) -> str:
+    """
+    pathlib.Path turns // into / when doing str(p)
+    This restore the gs://
+    Inputs:
+        p (PosixPath): pathlib.Path object
+    Outputs:
+        (str): the gas path as a string
+    """
+
+    return str(p).rstrip().replace("gs:/", "gs://")
+
+
+def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwargs) -> dict:
     """
     Parse a list of MSAT bucket paths and store them in a dictionary by target/collect/processing_id
 
     Inputs:
         file_list (str): full path to input file listing MSAT bucket paths
+        func (Callable): function to apply on the paths to get the dict values
+        kwargs (dict): passed to func
     Outputs:
         d (dict): dictionary of targets by target/collect/processing_id
     """
@@ -113,8 +149,7 @@ def get_target_dict(file_list: str) -> dict:
             old_p = list(d[t][c].keys())[0]
             if p < old_p:
                 continue
-        # pathlib.Path transforms // into /
-        d[t][c][p] = str(i).rstrip().replace("gs:/", "gs://")
+        d[t][c][p] = func(i, **kwargs)
 
     return d
 
@@ -142,15 +177,19 @@ def make_msat_targets_map(
     title: str = "MethaneSAT targets",
     file_list: Optional[str] = None,
     image_bucket: Optional[str] = None,
+    google_drive_id: Optional[str] = None,
+    service_account_file: Optional[str] = None,
 ):
     """
     Read the list of targets from the infile geojson file
 
     Inputs:
-            infile (str): input geojson file with all the target polygons
-            outfile (str): full path to the output html file
-            title (str): map title
-            file_list (Optional[str]): full path to list of data bucket files
+        infile (str): input geojson file with all the target polygons
+        outfile (str): full path to the output html file
+        title (str): map title
+        file_list (Optional[str]): full path to list of data bucket files
+        service_account_file (str): full path to the Google Drive API service account file
+        google_drive_id (str): Google Drive folder ID, must have been shared with the service account
     """
     gdf = gpd.read_file(infile)
 
@@ -186,7 +225,7 @@ def make_msat_targets_map(
     ]
 
     if file_list is not None:
-        td = get_target_dict(file_list)
+        td = get_target_dict(file_list, gs_posixpath_to_str)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
         vdims += ["ncollections", "collections", "target_code"]
         hover_tooltips += [("# Collects", "@ncollections"), ("target code", "@target_code")]
@@ -198,15 +237,28 @@ def make_msat_targets_map(
             gdf["qaqc_files"] = ""
             vdims += ["qaqc_files"]
             scatter_df_columns += ["qaqc_file"]
+            qaqc_td = get_target_dict(file_list, derive_L2_qaqc_path)
         if image_bucket is not None:
-            gdf["image_files"] = ""
-            vdims += ["image_files"]
-            scatter_df_columns += ["image_file"]
+            gdf["image_gs_files"] = ""
+            vdims += ["image_gs_files"]
+            scatter_df_columns += ["image_gs_file"]
+            image_td = get_target_dict(file_list, derive_image_path, image_bucket=image_bucket)
+        if google_drive_id is not None:
+            gdf["image_gdrive_files"] = ""
+            vdims += ["image_gdrive_files"]
+            scatter_df_columns += ["image_gdrive_file"]
+            gdrive_td = get_target_dict(
+                file_list,
+                derive_image_drive_link,
+                service_account_file=service_account_file,
+                google_drive_id=google_drive_id,
+            )
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
         # a collection ID has 8 characters
         # characters 4-6 correspond to a specific target
         # id_code_map maps these 3 characters to the corresponding target id
         id_code_map = {}
+
         for t in td:
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
@@ -214,11 +266,15 @@ def make_msat_targets_map(
             gdf.loc[gdf["id"] == t, "ncollections"] = len(list(td[t].keys()))
             if is_L2:
                 gdf.loc[gdf["id"] == t, "qaqc_files"] = "\n".join(
-                    [derive_L2_qaqc_path(td[t][c][p]) for c in td[t] for p in td[t][c]]
+                    [qaqc_td[t][c][p] for c in td[t] for p in td[t][c]]
                 )
             if image_bucket is not None:
-                gdf.loc[gdf["id"] == t, "image_files"] = "\n".join(
-                    [derive_image_path(td[t][c][p], image_bucket) for c in td[t] for p in td[t][c]]
+                gdf.loc[gdf["id"] == t, "image_gs_files"] = "\n".join(
+                    [image_td[t][c][p] for c in td[t] for p in td[t][c]]
+                )
+            if google_drive_id is not None:
+                gdf.loc[gdf["id"] == t, "image_gdrive_files"] = "\n".join(
+                    [gdrive_td[t][c][p] or "" for c in td[t] for p in td[t][c]]
                 )
             id_code = list(td[t].keys())[0][4:-1]
             gdf.loc[gdf["id"] == t, "target_code"] = id_code
@@ -227,9 +283,11 @@ def make_msat_targets_map(
                 for p in td[t][c]:
                     columns = [td[t][c][p], t]
                     if is_L2:
-                        columns += [derive_L2_qaqc_path(td[t][c][p])]
+                        columns += [qaqc_td[t][c][p]]
                     if image_bucket is not None:
-                        columns += [derive_image_path(td[t][c][p], image_bucket)]
+                        columns += [image_td[t][c][p]]
+                    if google_drive_id is not None:
+                        columns += [gdrive_td[t][c][p] or ""]
                     scatter_df.loc[len(scatter_df)] = columns
         gdf.loc[gdf["ncollections"] == 0, "default_color"] = "lightgray"
         gdf.loc[gdf["ncollections"] == 0, "fill_color"] = "lightgray"
@@ -289,7 +347,8 @@ def make_msat_targets_map(
     if ('ncollections' in data) var ncollections = Array.from(data['ncollections']);
     if ('target_code' in data) var target_code = data['target_code'];
     if ('qaqc_files' in data) var qaqc_files = data['qaqc_files'];
-    if ('image_files' in data) var image_files = data['image_files'];
+    if ('image_gs_files' in data) var image_gs_files = data['image_gs_files'];
+    if ('image_gdrive_files' in data) var image_gdrive_files = data['image_gdrive_files'];
 
     var hid = -1;
     for (var i=0;i<ids.length;i++){
@@ -313,7 +372,8 @@ def make_msat_targets_map(
             data['ncollections'] = new Int32Array(ncollections);
         }
         if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
-        if ('image_files' in data) image_files.push(image_files.splice(hid,1)[0]);
+        if ('image_gs_files' in data) image_gs_files.push(image_gs_files.splice(hid,1)[0]);
+        if ('image_gdrive_files' in data) image_gdrive_files.push(image_gdrive_files.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
         default_alpha.push(default_alpha.splice(hid,1)[0]);
         data['fill_alpha'] = new Float32Array(alpha);
@@ -391,7 +451,9 @@ def make_msat_targets_map(
         if is_L2:
             file_type_select_options += ["QAQC Plots"]
         if image_bucket is not None:
-            file_type_select_options += ["Images"]
+            file_type_select_options += ["Images (gs)"]
+        if google_drive_id is not None:
+            file_type_select_options += ["Images (gdrive)"]
         if is_L2 or image_bucket is not None:
             file_type_select = Select(
                 options=file_type_select_options, value="Data", title="File type:"
@@ -408,8 +470,10 @@ def make_msat_targets_map(
                     key = 'collections';
                 } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_files';
-                } else {
-                    key = 'image_files';
+                } else if (file_type_select.value==='Images (gs)') {
+                    key = 'image_gs_files';
+                } else if (file_type_select.value==='Images (gdrive)') {
+                    key = 'image_gdrive_files';
                 }
             } else {
                 key = 'collections';
@@ -425,7 +489,6 @@ def make_msat_targets_map(
                     all_collections.push(collections);
                 }
                 
-                // Join file paths with newlines
                 const combined_paths = all_collections.join('\\n');
                 
                 // Copy to clipboard
@@ -468,8 +531,10 @@ def make_msat_targets_map(
                     key = 'File';
                 } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_file';
-                } else {
-                    key = 'image_file';
+                } else if (file_type_select.value==='Images (gs)') {
+                    key = 'image_gs_file';
+                } else if (file_type_select.value==='Images (gdrive)') {
+                    key = 'image_gdrive_file';
                 }
             } else {
                 key = 'File';
@@ -481,6 +546,10 @@ def make_msat_targets_map(
                 }, function(err) {
                     console.error('Failed to copy text: ', err);
                 });;
+
+            if (key==='image_gdrive_file') {
+                window.open(file_path,'_blank');
+            }
 
             scatter_source.selected.indices = [];
             scatter_source.change.emit()
@@ -564,8 +633,10 @@ def make_msat_targets_map(
                     key = 'File';
                 } else if (file_type_select.value==='QAQC Plots') {
                     key = 'qaqc_file';
-                } else {
-                    key = 'image_file';
+                } else if (file_type_select.value==='Images (gs)') {
+                    key = 'image_gs_file';
+                } else if (file_type_select.value==='Images (gdrive)') {
+                    key = 'image_gdrive_file';
                 }
             } else {
                 key = 'File';
@@ -749,9 +820,29 @@ def main():
         default=None,
         help="full path to the bucket where the collect pngs are stored",
     )
+    parser.add_argument(
+        "-g",
+        "--google-drive-id",
+        default=None,
+        help="Google drive folder ID for uploading",
+    )
+    parser.add_argument(
+        "-s",
+        "--service-account-file",
+        default=None,
+        help="full path to the google service account file, only used if --google-drive is given",
+    )
     args = parser.parse_args()
 
-    make_msat_targets_map(args.infile, args.outfile, args.title, args.file_list, args.image_bucket)
+    make_msat_targets_map(
+        args.infile,
+        args.outfile,
+        args.title,
+        args.file_list,
+        args.image_bucket,
+        args.google_drive_id,
+        args.service_account_file,
+    )
 
 
 if __name__ == "__main__":
