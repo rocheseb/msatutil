@@ -42,6 +42,12 @@ notebooks = [
     "contextily",
     "reverse_geocode",
 ]
+gdrive = [
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
+    "google-api-python-client",
+]
 gcsfs = [
     "fsspec",
     "gcsfs"
