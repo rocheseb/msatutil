@@ -37,18 +37,24 @@ def upload_file(
         service_account_file, scopes=SCOPES
     )
 
-    mimetype, _ = mimetypes.guess_type(outfile)
-    if mimetype is None:
-        mimetype = "plain/text"
-
     drive_service = build("drive", "v3", credentials=credentials)
 
     filename = os.path.basename(outfile)
 
     # check if file already exists
     if not overwrite:
-        query = f"'{folder_id}' in parents and name = '{filename}'"
-        results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+        query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
+        results = (
+            drive_service.files()
+            .list(
+                q=query,
+                fields="files(id, name)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+                corpora="allDrives",
+            )
+            .execute()
+        )
         files = results.get("files", [])
 
         # If the file already exists, return the file ID
@@ -60,10 +66,21 @@ def upload_file(
         "parents": [folder_id],
     }
 
+    mimetype, _ = mimetypes.guess_type(outfile)
+    if mimetype is None:
+        mimetype = "plain/text"
+
     media = MediaFileUpload(outfile, mimetype=mimetype)
 
     uploaded_file = (
-        drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        drive_service.files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id",
+            supportsAllDrives=True,
+        )
+        .execute()
     )
     file_id = uploaded_file["id"]
 
@@ -75,7 +92,7 @@ def get_file_link(service_account_file: str, folder_id: str, filename: str) -> O
     Retrieve the file ID of a file in a specified Google Drive folder given its filename.
 
     Inputs:
- 
+
         filename (str): the name of the file to look for in the given drive folder
     Outputs:
         (Optional[str]): direct Google Drive link to the file
@@ -89,10 +106,20 @@ def get_file_link(service_account_file: str, folder_id: str, filename: str) -> O
     drive_service = build("drive", "v3", credentials=credentials)
 
     # Query to find the file by its name and the folder it belongs to
-    query = f"'{folder_id}' in parents and name = '{filename}'"
+    query = f"'{folder_id}' in parents and name = '{filename}' and trashed = false"
 
     # Perform the search
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+    results = (
+        drive_service.files()
+        .list(
+            q=query,
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+            corpora="allDrives",
+        )
+        .execute()
+    )
 
     # Get the first matching file (if any)
     files = results.get("files", [])
