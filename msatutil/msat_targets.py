@@ -509,7 +509,9 @@ def make_msat_targets_map(
             width=350,
             height=300,
             x_axis_type="datetime",
-            tools=["pan,wheel_zoom,box_zoom,reset,tap"],
+            tools="pan,wheel_zoom,box_zoom,reset,tap",
+            active_drag="pan",
+            active_scroll="wheel_zoom",
         )
         scatter = fig.scatter(
             "timestamps", "cumulcounts", source=scatter_source, color="color", size="size"
