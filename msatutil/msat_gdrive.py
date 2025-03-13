@@ -137,7 +137,7 @@ def get_file_link(service_account_file: str, folder_id: str, filename: str) -> O
         return None
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-i",
@@ -172,3 +172,7 @@ if __name__ == "__main__":
         )
         if link is not None:
             print(f"Uploaded {outfile}")
+
+
+if __name__ == "__main__":
+    main()
