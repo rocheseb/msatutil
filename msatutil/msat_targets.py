@@ -218,7 +218,7 @@ def make_msat_targets_map(
         "country",
     ]
     hover_tooltips = [
-        ("id", "@id"),
+        ("Target ID", "@id"),
         ("Name", "@name"),
         ("Country", "@country"),
         ("Type", "@type"),
@@ -232,7 +232,15 @@ def make_msat_targets_map(
         gdf["ncollections"] = 0
         gdf["collections"] = ""
         gdf["target_code"] = "***"
-        scatter_df_columns = ["File", "id"]
+        scatter_df_columns = [
+            "File",
+            "tid",
+            "cid",
+            "pid",
+            "name",
+            "country",
+            "type",
+        ]
         if is_L2:
             gdf["qaqc_files"] = ""
             vdims += ["qaqc_files"]
@@ -281,7 +289,9 @@ def make_msat_targets_map(
             id_code_map[id_code] = t
             for c in td[t]:
                 for p in td[t][c]:
-                    columns = [td[t][c][p], t]
+                    columns = [td[t][c][p], t, c, p] + list(
+                        gdf.loc[gdf["id"] == t, ["name", "country", "type"]].values[0]
+                    )
                     if is_L2:
                         columns += [qaqc_td[t][c][p]]
                     if image_bucket is not None:
@@ -295,6 +305,7 @@ def make_msat_targets_map(
         gdf.loc[gdf["ncollections"] == 0, "default_alpha"] = 0.5
 
         scatter_df["timestamps"] = scatter_df["File"].apply(extract_timestamp)
+        scatter_df["timestrings"] = scatter_df["timestamps"].astype(str)
         scatter_df["counts"] = 1
         scatter_df.loc[pd.isna(scatter_df["timestamps"]), "counts"] = 0
         scatter_df = scatter_df.sort_values(by=["timestamps"]).reset_index()
@@ -454,7 +465,7 @@ def make_msat_targets_map(
             file_type_select_options += ["Images (gs)"]
         if google_drive_id is not None:
             file_type_select_options += ["Images (gdrive)"]
-        if is_L2 or image_bucket is not None:
+        if is_L2 or image_bucket is not None or google_drive_id is not None:
             file_type_select = Select(
                 options=file_type_select_options, value="Data", title="File type:"
             )
@@ -516,12 +527,46 @@ def make_msat_targets_map(
         scatter = fig.scatter(
             "timestamps", "cumulcounts", source=scatter_source, color="color", size="size"
         )
-        scatter_hover = HoverTool(tooltips=None, renderers=[scatter])
+        scatter_hover = HoverTool(
+            tooltips=[
+                ("Target ID", "@tid"),
+                ("Collection ID", "@cid"),
+                ("Process ID", "@pid"),
+                ("Country", "@country"),
+                ("Name", "@name"),
+                ("Type", "@type"),
+                ("UTC Time", "@timestrings"),
+            ],
+            renderers=[scatter],
+        )
         fig.add_tools(scatter_hover)
+
         scatter_taptool = fig.select_one(TapTool)
         scatter_taptool_callback_args = {"scatter_source": scatter_source}
         if is_L2 or image_bucket is not None:
             scatter_taptool_callback_args["file_type_select"] = file_type_select
+        if "file_type_select" in locals():
+            file_type_select.js_on_change(
+                "value",
+                CustomJS(
+                    args={"scatter_hover": scatter_hover},
+                    code="""
+                    let key;
+                    if (cb_obj.value==='Data') {
+                        key = 'File';
+                    } else if (cb_obj.value==='QAQC Plots') {
+                        key = 'qaqc_file';
+                    } else if (cb_obj.value==='Images (gs)') {
+                        key = 'image_gs_file';
+                    } else if (cb_obj.value==='Images (gdrive)') {
+                        key = 'image_gdrive_file';
+                    }
+
+                    scatter_hover.tooltips = [['File','@' + key]];
+                    """,
+                ),
+            )
+
         # callback to copy the corresponding file path when clicking on the scatter points
         scatter_taptool.callback = CustomJS(
             args=scatter_taptool_callback_args,
@@ -565,15 +610,26 @@ def make_msat_targets_map(
         scatter_hover.callback = CustomJS(
             args={"scatter_source": scatter_source, "inp": inp},
             code="""
-            // Get hovered file from scatter
-            const hovered_indices = cb_data["index"].indices;
+            var hovered_indices = cb_data["index"].indices;
             const scatter_data = scatter_source.data;
             const hovered_index = hovered_indices[hovered_indices.length-1];
-            const target_id = scatter_source.data["id"][hovered_index];
-            
+            const target_id = scatter_source.data["tid"][hovered_index];
+
             if (hovered_indices.length>0 && inp.value!=target_id){
                 inp.value = target_id;
             } 
+
+            setTimeout(function() {
+                var tooltips = window.document.querySelectorAll(".bk-Tooltip")[0]?.shadowRoot?.children[7]?.children[0]?.children;
+                
+                if (tooltips) {
+                    for (let i = 0; i < tooltips.length - 1; i++) {
+                        tooltips[i].style.display = 'none';
+                    }
+                } else {
+                    console.warn("Tooltips not found");
+                }
+            }, 100);
             """,
         )
 
@@ -582,7 +638,7 @@ def make_msat_targets_map(
         inp_callback_code += """
         var scatter_colors = scatter_source.data["color"];
         var scatter_size = scatter_source.data["size"];
-        var ids = scatter_source.data["id"];
+        var ids = scatter_source.data["tid"];
 
         for (let i = 0; i < ids.length; i++) {
             scatter_colors[i] = (ids[i] === selected_id) ? "red" : "#1f77b4";
@@ -628,7 +684,7 @@ def make_msat_targets_map(
                 args=date_slider_button_callback_args,
                 code="""
             const timestamps = scatter_source.data["timestamps"];
-            const ids = scatter_source.data["id"];
+            const ids = scatter_source.data["tid"];
             let key;
             if (typeof file_type_select !== 'undefined'){
                 if (file_type_select.value==='Data') {
