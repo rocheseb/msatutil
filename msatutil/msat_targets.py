@@ -818,7 +818,7 @@ def make_msat_targets_map(
     )
 
     if file_list is not None:
-        if is_L2 or image_bucket is not None:
+        if is_L2 or image_bucket is not None or google_drive_id is not None:
             layout = Row(
                 bokeh_plot,
                 Column(
