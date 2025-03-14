@@ -330,6 +330,7 @@ def make_msat_targets_map(
         )
     )
     bokeh_plot = hv.render(plot, backend="bokeh")
+    bokeh_plot.sizing_mode = "scale_both"
 
     poly_source = bokeh_plot.renderers[1].data_source
 
@@ -620,6 +621,8 @@ def make_msat_targets_map(
             } 
 
             setTimeout(function() {
+                // this is to only keep the last tooltip when hovering over clumped points
+                // set the other tooltips display to none
                 var tooltips = window.document.querySelectorAll(".bk-Tooltip")[0]?.shadowRoot?.children[7]?.children[0]?.children;
                 
                 if (tooltips) {
@@ -856,6 +859,8 @@ def make_msat_targets_map(
             bokeh_plot,
             Column(inp, legend_div, alpha_button, country_input, country_div, creation_time_div),
         )
+
+    layout.sizing_mode = "scale_both"
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
