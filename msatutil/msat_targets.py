@@ -546,27 +546,6 @@ def make_msat_targets_map(
         scatter_taptool_callback_args = {"scatter_source": scatter_source}
         if is_L2 or image_bucket is not None:
             scatter_taptool_callback_args["file_type_select"] = file_type_select
-        if "file_type_select" in locals():
-            file_type_select.js_on_change(
-                "value",
-                CustomJS(
-                    args={"scatter_hover": scatter_hover},
-                    code="""
-                    let key;
-                    if (cb_obj.value==='Data') {
-                        key = 'File';
-                    } else if (cb_obj.value==='QAQC Plots') {
-                        key = 'qaqc_file';
-                    } else if (cb_obj.value==='Images (gs)') {
-                        key = 'image_gs_file';
-                    } else if (cb_obj.value==='Images (gdrive)') {
-                        key = 'image_gdrive_file';
-                    }
-
-                    scatter_hover.tooltips = [['File','@' + key]];
-                    """,
-                ),
-            )
 
         # callback to copy the corresponding file path when clicking on the scatter points
         scatter_taptool.callback = CustomJS(
