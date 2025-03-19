@@ -99,7 +99,6 @@ def get_file_link(service_account_file: str, folder_id: str, filename: str) -> O
     Retrieve the file ID of a file in a specified Google Drive folder given its filename.
 
     Inputs:
-
         filename (str): the name of the file to look for in the given drive folder
     Outputs:
         (Optional[str]): direct Google Drive link to the file
