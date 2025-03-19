@@ -16,6 +16,7 @@ from bokeh.models import (
     Button,
     DateRangeSlider,
     Select,
+    BoxSelectTool,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -224,7 +225,9 @@ def make_msat_targets_map(
         ("Type", "@type"),
     ]
 
+    map_tools = ["hover", "fullscreen", "tap"]
     if file_list is not None:
+        map_tools += ["box_select"]
         td = get_target_dict(file_list, gs_posixpath_to_str)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
         vdims += ["ncollections", "collections", "target_code"]
@@ -318,7 +321,7 @@ def make_msat_targets_map(
     polygons = gv.Polygons(gdf, vdims=vdims)
     plot = base_map * polygons.opts(
         hv.opts.Polygons(
-            tools=["hover", "fullscreen", "tap"],
+            tools=map_tools,
             active_tools=["pan", "wheel_zoom", "tap"],
             fill_color="fill_color",
             fill_alpha="fill_alpha",
@@ -659,7 +662,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "date_slider": date_slider,
         }
-        if is_L2 or image_bucket is not None:
+        if is_L2 or image_bucket is not None or google_drive_id is not None:
             date_slider_button_callback_args["file_type_select"] = file_type_select
         date_slider_button.js_on_click(
             CustomJS(
@@ -709,6 +712,70 @@ def make_msat_targets_map(
             });
             """,
             )
+        )
+
+        box_select = bokeh_plot.select_one(BoxSelectTool)
+        box_select_callback_args = {
+            "box_select": box_select,
+            "taptool": taptool,
+            "scatter_source": scatter_source,
+            "poly_source": poly_source,
+        }
+        if is_L2 or image_bucket is not None or google_drive_id is not None:
+            box_select_callback_args["file_type_select"] = file_type_select
+        bokeh_plot.js_on_event(
+            "selectiongeometry",
+            CustomJS(
+                args=box_select_callback_args,
+                code="""
+            if (poly_source.selected.indices.length>0){
+                const selected = poly_source.selected.indices;
+                const poly_ids = poly_source.data["id"];
+                const targets_in_box = selected.map(i => poly_ids[i]);
+                let key;
+                if (typeof file_type_select !== 'undefined'){
+                    if (file_type_select.value==='Data') {
+                        key = 'File';
+                    } else if (file_type_select.value==='QAQC Plots') {
+                        key = 'qaqc_file';
+                    } else if (file_type_select.value==='Images (gs)') {
+                        key = 'image_gs_file';
+                    } else if (file_type_select.value==='Images (gdrive)') {
+                        key = 'image_gdrive_file';
+                    }
+                } else {
+                    key = 'File';
+                }
+                const paths = scatter_source.data[key];
+                const scatter_ids = scatter_source.data["tid"];
+
+                let selected_paths = [];
+                let selected_ids = [];
+                for (let i=0;i<paths.length;i++){
+                    if (targets_in_box.includes(scatter_ids[i])){
+                        selected_paths.push(paths[i]);
+                        selected_ids.push(scatter_ids[i]);
+                    }
+                }
+
+                // sort the selected paths by target id
+                const sortedIndices = selected_ids.map((value, index) => index)
+                            .sort((i, j) => selected_ids[i] - selected_ids[j]);
+                const sorted_paths = sortedIndices.map(i => selected_paths[i]);
+
+                const combined_paths = sorted_paths.join('\\n');
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(combined_paths).then(function() {
+                    alert(sorted_paths.length+` File paths copied to clipboard for `+targets_in_box.length+` targets`);
+                }, function(err) {
+                    console.error('Failed to copy text: ', err);
+                });
+                poly_source.selected.indices = [];
+                poly_source.change.emit();
+            }
+        """,
+            ),
         )
     # enf of if file_list is not None
 
@@ -773,11 +840,7 @@ def make_msat_targets_map(
     country_input = Select(
         value=None, options=sorted(list(set(gdf["country"]))), width=200, title="Get Target IDs in:"
     )
-    country_input.js_on_change(
-        "value",
-        CustomJS(
-            args={"country_div": country_div, "poly_source": poly_source},
-            code="""
+    country_input_callback_code = """
         const countries = poly_source.data["country"];
         const ids = poly_source.data["id"];
         const ids_in_country = ids.filter((_, i) => countries[i] === cb_obj.value);
@@ -795,10 +858,79 @@ def make_msat_targets_map(
             .map(chunk => chunk.join(", "))
             .join("<br>");
         country_div.text = ids_in_country.length + " target IDs in selected country:<br>"+formattedText;
-        """,
+        """
+
+    if file_list is not None:
+        country_input_callback_code += """
+            const countries_scatter = scatter_source.data["country"];
+            const ncollects = countries_scatter.filter(item => item === cb_obj.value).length;
+            country_div.text = country_div.text + "<br>Total number of collections: "+ncollects;
+            """
+        country_button_callback_args = {
+            "country_input": country_input,
+            "scatter_source": scatter_source,
+        }
+        if is_L2 or image_bucket is not None or google_drive_id is not None:
+            country_button_callback_args["file_type_select"] = file_type_select
+        country_button = Button(label="Copy collection paths in selected country", width=300)
+        country_button.js_on_click(
+            CustomJS(
+                args=country_button_callback_args,
+                code="""
+                var countries = scatter_source.data["country"];
+                var scatter_ids = scatter_source.data["tid"];
+                let key;
+                if (typeof file_type_select !== 'undefined'){
+                    if (file_type_select.value==='Data') {
+                        key = 'File';
+                    } else if (file_type_select.value==='QAQC Plots') {
+                        key = 'qaqc_file';
+                    } else if (file_type_select.value==='Images (gs)') {
+                        key = 'image_gs_file';
+                    } else if (file_type_select.value==='Images (gdrive)') {
+                        key = 'image_gdrive_file';
+                    }
+                } else {
+                    key = 'File';
+                }
+                const paths = scatter_source.data[key]; 
+
+                let selected_paths = [];
+                let selected_ids = [];
+                for (let i=0;i<paths.length;i++){
+                    if (countries[i] === country_input.value){
+                        selected_paths.push(paths[i]);
+                        selected_ids.push(scatter_ids[i]);
+                    }
+                }
+
+                // sort the selected paths by target id
+                const sortedIndices = selected_ids.map((value, index) => index)
+                            .sort((i, j) => selected_ids[i] - selected_ids[j]);
+                const sorted_paths = sortedIndices.map(i => selected_paths[i]);
+
+                const combined_paths = sorted_paths.join('\\n');
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(combined_paths).then(function() {
+                    alert(sorted_paths.length+` File paths copied to clipboard`);
+                }, function(err) {
+                    console.error('Failed to copy text: ', err);
+                });
+                """,
+            )
+        )
+    country_input.js_on_change(
+        "value",
+        CustomJS(
+            args={
+                "country_div": country_div,
+                "poly_source": poly_source,
+                "scatter_source": scatter_source,
+            },
+            code=country_input_callback_code,
         ),
     )
-
     if file_list is not None:
         if is_L2 or image_bucket is not None or google_drive_id is not None:
             layout = Row(
@@ -814,6 +946,7 @@ def make_msat_targets_map(
                     alpha_button,
                     country_input,
                     country_div,
+                    country_button,
                     creation_time_div,
                 ),
             )
@@ -830,6 +963,7 @@ def make_msat_targets_map(
                     alpha_button,
                     country_input,
                     country_div,
+                    country_button,
                     creation_time_div,
                 ),
             )
