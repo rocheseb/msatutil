@@ -19,10 +19,10 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "dask[dataframe]",
-    "netcdf4",
-    "matplotlib",
-    "pandas",
+    "dask[dataframe]==2024.6.2",
+    "netcdf4==1.6.5",
+    "matplotlib==3.8.4",
+    "pandas==2.2.3",
     "scipy==1.12.0",
     "tqdm",
     "google-cloud-storage",
@@ -32,14 +32,14 @@ dependencies = [
 [project.optional-dependencies]
 notebooks = [
     "notebook",
-    "panel",
+    "panel==1.5.0",
     "holoviews==1.19.1",
-    "cartopy",
-    "geoviews",
-    "geopandas",
-    "datashader",
+    "cartopy==0.23.0",
+    "geoviews==1.13.0",
+    "geopandas==1.0.1",
+    "datashader==0.16.3",
     "pyproj",
-    "contextily",
+    "contextily==1.6.2",
     "reverse_geocode",
 ]
 gdrive = [
