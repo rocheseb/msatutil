@@ -40,10 +40,16 @@ def extract_timestamp(text: str) -> Optional[str]:
     Outputs:
         (Optional[str]): the timestamp (or None)
     """
-    match = re.search(r"(\d{8}T\d{6})", text)
-    time_fmt = "%Y%m%dT%H%M%S"
+    if "_L0_" in text:
+        match = re.search(r"\d{4}/\d{2}/\d{2}", text)
+        match_id = 0
+        time_fmt = "%Y/%m/%d"
+    else:
+        match = re.search(r"(\d{8}T\d{6})", text)
+        match_id = 1
+        time_fmt = "%Y%m%dT%H%M%S"
     if match:
-        return pd.to_datetime(datetime.strptime(match.group(1), time_fmt), format=time_fmt)
+        return pd.to_datetime(datetime.strptime(match.group(match_id), time_fmt), format=time_fmt)
     return None
 
 
@@ -135,11 +141,27 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
     """
     with open(file_list, "r") as fin:
         file_list = [Path(i) for i in fin.readlines()]
+    is_L0 = "_L0_" in str(file_list[0])
+    if is_L0:
+        tindex = 2
+        cindex = 6
+        pindex = 7
+    else:
+        tindex = 3
+        cindex = 5
+        pindex = 6
+
     d = {}
     for i in file_list:
-        t = int(i.parts[3].strip("t"))
-        c = i.parts[5].strip("c")
-        p = int(i.parts[6].strip("p"))
+        t = int(i.parts[tindex].strip("t"))
+        c = i.parts[cindex].strip("c")
+        if is_L0:
+            try:
+                p = int(re.search(r"(?i)po[-_](\d{4})", i.parts[pindex]).group(1))
+            except Exception:
+                continue
+        else:
+            p = int(i.parts[pindex].strip("p"))
         if t not in d:
             d[t] = {}
         if c not in d[t]:
@@ -150,7 +172,7 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
             old_p = list(d[t][c].keys())[0]
             if p < old_p:
                 continue
-        d[t][c][p] = func(i, **kwargs)
+        d[t][c] = {p: func(i, **kwargs)}
 
     return d
 
