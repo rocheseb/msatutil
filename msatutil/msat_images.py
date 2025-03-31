@@ -13,7 +13,10 @@ def select_colorscale(mc: msat_collection) -> tuple[float, float]:
     """
     Get the vmin and vmax that will be used for the XCH4 plot
     """
-    xch4 = mc.pmesh_prep("product_co2proxy/xch4_co2proxy", use_valid_xtrack=True).compute()
+    if mc.is_l2:
+        xch4 = mc.pmesh_prep("product_co2proxy/xch4_co2proxy", use_valid_xtrack=True).compute()
+    elif mc.is_l3:
+        xch4 = mc.pmesh_prep("xch4").compute()
     if mc.is_postproc:
         flag = mc.pmesh_prep("product_co2proxy/main_quality_flag", use_valid_xtrack=True).compute()
     else:
