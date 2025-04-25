@@ -1,12 +1,48 @@
 import os
 import argparse
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
 from msatutil.msat_interface import msat_collection
 from msatutil.msat_targets import get_target_dict
 from msatutil.msat_gdrive import upload_file as google_drive_upload
+
+
+def qaqc_filter(qaqc_file) -> bool:
+    """
+    Filter some collects based on some L2 qaqc metrics
+
+    Inputs:
+        qaqc_file (str): L2 qaqc csv file
+    Outputs:
+        (bool): True if the collect passes, False otherwise
+    """
+    data = pd.read_csv(qaqc_file, names=["var", "status", "value"], skiprows=1)
+    if any(data["status"] == "fail"):
+        return False
+
+    # Don't include scenes with more than 5% missing frames
+    missing_frames_fraction = float(
+        data.loc[data["var"] == "Missing frames fraction"].iloc[0].value
+    )
+    if missing_frames_fraction > 0.05:
+        return False
+
+    # Don't include scenes with anomalous delta_pressure that could be contaminated by aerosols
+    anomalous_o2dp = data.loc[data["var"] == "Anomalous O2DP"].iloc[0].value == "true"
+    if anomalous_o2dp:
+        return False
+
+    # Don't include scenes more than 60% cloudy/shadowy
+    cloud_fraction = float(data.loc[data["var"] == "Cloud fraction"].iloc[0].value)
+    shadow_fraction = float(data.loc[data["var"] == "Shadow fraction"].iloc[0].value)
+
+    if cloud_fraction + shadow_fraction > 0.6:
+        return False
+
+    return True
 
 
 def select_colorscale(mc: msat_collection) -> tuple[float, float]:
@@ -130,7 +166,7 @@ def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
         under=None,
         latlon_padding=0.2,
         lab_prec=1,
-        latlon_step=0.5,
+        latlon_step=1,
         cb_fraction=0.03,
         add_basemap=add_basemap,
     )
@@ -145,7 +181,7 @@ def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
         under=None,
         latlon_padding=0.2,
         lab_prec=1,
-        latlon_step=0.5,
+        latlon_step=1,
         cb_fraction=0.03,
         cmap="Greys_r",
     )
@@ -197,13 +233,22 @@ def main():
         action="store_true",
         help="if given, remake all images even if they already exist",
     )
+    parser.add_argument(
+        "--qaqc-list",
+        default=None,
+        help="if given, also pull the L2 QAQC csv files to filter out some scenes",
+    )
     args = parser.parse_args()
 
     td = get_target_dict(args.file_list)
+    if args.qaqc_list:
+        qcd = get_target_dict(args.qaqc_list)
     for t in td:
         for c in td[t]:
             for p in td[t][c]:
                 td[t][c][p] = Path(td[t][c][p])
+                if args.qaqc_list:
+                    qcd[t][c][p] = Path(qcd[t][c][p])
     first_value = list(next(iter(next(iter(td.values())).values())).values())[0].name
 
     if "_L1B_" in first_value:
@@ -225,9 +270,22 @@ def main():
                 )
                 if not args.overwrite and png_file.exists():
                     continue
+                if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c][p]):
+                    print(f"No L2 qaqc corresponding to: {gs_file}")
+                    continue
                 try:
                     downloaded_file = Path(args.download_dir) / gs_file.name
                     os.system(f"gsutil cp {str(gs_file).replace('gs:/','gs://')} {downloaded_file}")
+                    if args.qaqc_list:
+                        qc_gs_file = qcd[t][c][p]
+                        downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
+                        os.system(
+                            f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
+                        )
+                        do_plot = qaqc_filter(downloaded_qc_file)
+                        if not do_plot:
+                            print(f"Filtered out: {qc_gs_file}")
+                            continue
                     plot_func(
                         str(downloaded_file),
                         png_file,
@@ -239,6 +297,8 @@ def main():
                 finally:
                     if downloaded_file.exists():
                         os.remove(downloaded_file)
+                    if args.qaqc_list and downloaded_qc_file.exists():
+                        os.remove(downloaded_qc_file)
 
     # upload the pngs to the given bucket
     if args.overwrite:
