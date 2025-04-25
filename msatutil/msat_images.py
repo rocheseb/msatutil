@@ -270,7 +270,7 @@ def main():
                 )
                 if not args.overwrite and png_file.exists():
                     continue
-                if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c][p]):
+                if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
                     continue
                 try:
