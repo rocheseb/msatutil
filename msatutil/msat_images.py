@@ -273,26 +273,26 @@ def main():
                 png_file = (
                     Path(args.out_dir) / f"{gs_file.parts[3]}_{gs_file.name.replace('.nc','.png')}"
                 )
-                if not args.overwrite and png_file.exists():
-                    continue
                 if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
+                    continue
+                if args.qaqc_list:
+                    qc_gs_file = qcd[t][c][p]
+                    downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
+                    os.system(
+                        f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
+                    )
+                    do_plot = qaqc_filter(downloaded_qc_file)
+                    if not do_plot:
+                        print(f"Filtered out: {qc_gs_file}")
+                        if png_file.exists():
+                            os.remove(png_file)
+                        continue
+                if not args.overwrite and png_file.exists():
                     continue
                 try:
                     downloaded_file = Path(args.download_dir) / gs_file.name
                     os.system(f"gsutil cp {str(gs_file).replace('gs:/','gs://')} {downloaded_file}")
-                    if args.qaqc_list:
-                        qc_gs_file = qcd[t][c][p]
-                        downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
-                        os.system(
-                            f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
-                        )
-                        do_plot = qaqc_filter(downloaded_qc_file)
-                        if not do_plot:
-                            print(f"Filtered out: {qc_gs_file}")
-                            if png_file.exists():
-                                os.remove(png_file)
-                            continue
                     plot_func(
                         str(downloaded_file),
                         png_file,
