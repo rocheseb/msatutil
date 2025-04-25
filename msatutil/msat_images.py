@@ -23,6 +23,11 @@ def qaqc_filter(qaqc_file) -> bool:
     if any(data["status"] == "fail"):
         return False
 
+    # Don't include scenes more than 70% flagged
+    flag_fraction = float(data.loc[data["var"] == "CH4 flagged fraction"].iloc[0].value)
+    if flag_fraction > 0.7:
+        return False
+
     # Don't include scenes with more than 5% missing frames
     missing_frames_fraction = float(
         data.loc[data["var"] == "Missing frames fraction"].iloc[0].value
@@ -285,6 +290,8 @@ def main():
                         do_plot = qaqc_filter(downloaded_qc_file)
                         if not do_plot:
                             print(f"Filtered out: {qc_gs_file}")
+                            if png_file.exists():
+                                os.remove(png_file)
                             continue
                     plot_func(
                         str(downloaded_file),
