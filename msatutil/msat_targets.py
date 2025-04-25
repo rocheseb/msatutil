@@ -90,7 +90,9 @@ def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
         / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
     )
 
-    return gs_posixpath_to_str(image_file_path)
+    return gs_posixpath_to_str(image_file_path).replace(
+        "gs://", "https://storage.cloud.google.com/"
+    )
 
 
 def derive_image_drive_link(
@@ -599,7 +601,7 @@ def make_msat_targets_map(
                     console.error('Failed to copy text: ', err);
                 });;
 
-            if (key==='image_gdrive_file') {
+            if (key==='image_gdrive_file' || key==='image_gs_file') {
                 window.open(file_path,'_blank');
             }
 
