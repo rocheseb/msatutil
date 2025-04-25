@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 import holoviews as hv
 import geoviews as gv
+from geoviews.element import WMTS
 from bokeh.models import (
     TextInput,
     NumericInput,
@@ -29,6 +30,8 @@ import reverse_geocode
 from msatutil.msat_gdrive import get_file_link
 
 gv.extension("bokeh")
+
+GOOGLE_IMAGERY = WMTS("https://mt1.google.com/vt/lyrs=s&x={X}&y={Y}&z={Z}", name="GoogleImagery")
 
 
 def extract_timestamp(text: str) -> Optional[str]:
@@ -179,6 +182,49 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
     return d
 
 
+def get_target_dict_from_images(file_list: str) -> dict:
+    """
+    Inputs:
+        file_list (str): full path to input file listing MSAT bucket paths to images
+    Outputs:
+        d (dict): dictionary of targets by target/collect/processing_id
+    """
+    with open(file_list, "r") as fin:
+        file_list = [Path(i) for i in fin.readlines()]
+
+    pattern = re.compile(
+        r"^t(?P<target_id>\d+)"
+        r"_(?P<platform>\w+)"
+        r"_(?P<level>\w+)"
+        r"_(?P<gridsize>\w+)"
+        r"_c(?P<collection_id>[A-Za-z0-9]{8})"
+        r"_p(?P<processing_id>\d+)"
+        r"_v(?P<version>\d{8})"
+        r"_(?P<start_time>\d{8}T\d{6})Z"
+        r"_(?P<end_time>(?:\d{8}T)?\d{6})Z"
+        r"(?:_(?P<tag>\w+))?"
+        r"\.png$"
+    )
+
+    d = {}
+    for i in file_list:
+        match = pattern.match(i.name)
+        t = int(match.group("target_id"))
+        c = match.group("collection_id")
+        p = int(match.group("processing_id"))
+        if t not in d:
+            d[t] = {}
+        if c not in d[t]:
+            d[t][c] = {}
+        if d[t][c] != {}:
+            old_p = list(d[t][c].keys())[0]
+            if p < old_p:
+                continue
+        d[t][c] = {p: gs_posixpath_to_str(i).replace("gs://", "https://storage.cloud.google.com/")}
+
+    return d
+
+
 def get_country(lat: float, lon: float) -> Optional[str]:
     """
     Get the country corresponding to the given lat/lon
@@ -204,6 +250,7 @@ def make_msat_targets_map(
     image_bucket: Optional[str] = None,
     google_drive_id: Optional[str] = None,
     service_account_file: Optional[str] = None,
+    public: bool = False,
 ):
     """
     Read the list of targets from the infile geojson file
@@ -215,6 +262,8 @@ def make_msat_targets_map(
         file_list (Optional[str]): full path to list of data bucket files
         service_account_file (str): full path to the Google Drive API service account file
         google_drive_id (str): Google Drive folder ID, must have been shared with the service account
+        service_account_file (str): full path to the service account file
+        public (bool): if True, only link bucket images and only show targets with at least 1 collect
     """
     gdf = gpd.read_file(infile)
 
@@ -252,7 +301,10 @@ def make_msat_targets_map(
     map_tools = ["hover", "fullscreen", "tap"]
     if file_list is not None:
         map_tools += ["box_select"]
-        td = get_target_dict(file_list, gs_posixpath_to_str)
+        if public:
+            td = get_target_dict_from_images(file_list)
+        else:
+            td = get_target_dict(file_list, gs_posixpath_to_str)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
         vdims += ["ncollections", "collections", "target_code"]
         hover_tooltips += [("# Collects", "@ncollections"), ("target code", "@target_code")]
@@ -341,7 +393,13 @@ def make_msat_targets_map(
         scatter_df["size"] = 4
     # end of if file_list is not None
 
-    base_map = gv.tile_sources.EsriImagery()
+    if public:
+        gdf = gdf.loc[gdf["ncollections"] > 0]
+
+    if public:
+        base_map = GOOGLE_IMAGERY
+    else:
+        base_map = gv.tile_sources.EsriImagery()
     polygons = gv.Polygons(gdf, vdims=vdims)
     plot = base_map * polygons.opts(
         hv.opts.Polygons(
@@ -601,7 +659,8 @@ def make_msat_targets_map(
                     console.error('Failed to copy text: ', err);
                 });;
 
-            if (key==='image_gdrive_file' || key==='image_gs_file') {
+            console.log(file_path);
+            if (key==='image_gdrive_file' || file_path.endsWith(".png")) {
                 window.open(file_path,'_blank');
             }
 
@@ -806,8 +865,18 @@ def make_msat_targets_map(
     inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
     inp.js_on_change("value", inp_callback)
 
+    if public:
+        no_collect_legend = ""
+    else:
+        no_collect_legend = """
+        <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:lightgray; margin-right:5px;"></div>
+        <span>No collects</span>
+        </div>
+        """
+
     legend_div = Div(
-        text="""
+        text=f"""
     <div style="padding:10px; width:150px;">
 
       <div style="display:flex; align-items:center; margin-top:5px;">
@@ -822,10 +891,7 @@ def make_msat_targets_map(
         <div style="width:15px; height:15px; background-color:deepskyblue; margin-right:5px;"></div>
         <span>Cal/Val</span>
       </div>
-      <div style="display:flex; align-items:center; margin-top:5px;">
-        <div style="width:15px; height:15px; background-color:lightgray; margin-right:5px;"></div>
-        <span>No collects</span>
-      </div>
+      {no_collect_legend}
     </div>
     """
     )
@@ -856,7 +922,7 @@ def make_msat_targets_map(
     alpha_button.js_on_click(alpha_button_callback)
 
     creation_time_div = Div(
-        text=f"Last update: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
+        text=f"<font size=2 color='teal'><b>Last update</b></font>: {pd.Timestamp.strftime(pd.Timestamp.utcnow(),'%Y-%m-%d %H:%M UTC')}",
         width=300,
     )
 
@@ -955,8 +1021,37 @@ def make_msat_targets_map(
             code=country_input_callback_code,
         ),
     )
+
     if file_list is not None:
-        if is_L2 or image_bucket is not None or google_drive_id is not None:
+        if public:
+            note_div = Div(
+                width=340,
+                text="""
+            <font size=3 color="teal"><b>Notes:</b></font></br>
+            Hover on target polygons to see more information on a given target.</br>
+            The scatter plot shows the time series of individual collections.</br>
+            When hovering on a target on the map, it is highlighted in red on the map, and all collection over that target are highlighted in red in the scatter plot.</br>
+            Clicking on a target on the map will copy the images paths to all the collects in that target.</br>
+            Clicking on a collect on the scatter plot will pop up the Level3 image for that collection. 
+            """,
+            )
+            layout = Row(
+                bokeh_plot,
+                Column(
+                    inp,
+                    Row(legend_div, Column(target_code_inp, target_code_div)),
+                    fig,
+                    date_slider,
+                    date_slider_info_div,
+                    date_slider_button,
+                    country_input,
+                    country_div,
+                    country_button,
+                    note_div,
+                    creation_time_div,
+                ),
+            )
+        elif is_L2 or image_bucket is not None or google_drive_id is not None:
             layout = Row(
                 bokeh_plot,
                 Column(
@@ -1032,6 +1127,11 @@ def main():
         default=None,
         help="full path to the google service account file, only used if --google-drive is given",
     )
+    parser.add_argument(
+        "--public",
+        action="store_true",
+        help="if given, generate a public map that only shows targets with at least 1 collect and only links to images",
+    )
     args = parser.parse_args()
 
     make_msat_targets_map(
@@ -1042,6 +1142,7 @@ def main():
         args.image_bucket,
         args.google_drive_id,
         args.service_account_file,
+        args.public,
     )
 
 
