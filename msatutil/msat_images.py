@@ -17,47 +17,47 @@ def qaqc_filter(qaqc_file) -> bool:
     Inputs:
         qaqc_file (str): L2 qaqc csv file
     Outputs:
-        (bool): True if the collect passes, False otherwise
+        (str): empty string if the collect passes, reason for failing returned otherwise
     """
     data = pd.read_csv(qaqc_file, names=["var", "status", "value"], skiprows=1)
     if any(data["status"] == "fail"):
-        return False
+        return "Fail"
 
     # Don't include scenes with more than 5% missing frames
     missing_frames_fraction = float(
         data.loc[data["var"] == "Missing frames fraction"].iloc[0].value
     )
     if missing_frames_fraction > 0.05:
-        return False
+        return ">5% Missing frames"
 
     # Don't include scenes with less than 300 frames
     number_of_frames = float(data.loc[data["var"] == "Number of frames"].iloc[0].value)
     if number_of_frames < 300:
-        return False
+        return "<300 frames"
 
     # Don't include scenes more than 70% flagged
     flag_fraction = float(data.loc[data["var"] == "CH4 flagged fraction"].iloc[0].value)
     if flag_fraction > 0.7:
-        return False
+        return ">70% flagged"
 
     # Don't include scenes where the non-flagged XCH4 standard deviation > 100 ppb
     xch4_std = float(data.loc[data["var"] == "XCH4 flag0 STD"].iloc[0].value)
     if xch4_std > 100:
-        return False
+        return ">100ppb XCH4 STD"
 
     # Don't include scenes with anomalous delta_pressure that could be contaminated by aerosols
     anomalous_o2dp = data.loc[data["var"] == "Anomalous O2DP"].iloc[0].value == "true"
     if anomalous_o2dp:
-        return False
+        return "Anomalous O2DP"
 
     # Don't include scenes more than 60% cloudy/shadowy
     cloud_fraction = float(data.loc[data["var"] == "Cloud fraction"].iloc[0].value)
     shadow_fraction = float(data.loc[data["var"] == "Shadow fraction"].iloc[0].value)
 
     if cloud_fraction + shadow_fraction > 0.6:
-        return False
+        return ">60% clouds+shadows"
 
-    return True
+    return ""
 
 
 def select_colorscale(mc: msat_collection) -> tuple[float, float]:
@@ -299,7 +299,7 @@ def main():
                     continue
                 if args.qaqc_filter:  # "manual" filter
                     if t in filter_targets or c in filter_df["collection"].values:
-                        print(f"Filtered out: {gs_file}")
+                        print(f"Filtered out (manual): {gs_file}")
                         if png_file.exists():
                             os.remove(png_file)
                         continue
@@ -309,9 +309,9 @@ def main():
                     os.system(
                         f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
                     )
-                    do_plot = qaqc_filter(downloaded_qc_file)
-                    if not do_plot:
-                        print(f"Filtered out: {gs_file}")
+                    skip_plot = qaqc_filter(downloaded_qc_file)
+                    if skip_plot:
+                        print(f"Filtered out (auto) for {skip_plot}: {gs_file}")
                         if png_file.exists():
                             os.remove(png_file)
                         continue
