@@ -18,6 +18,8 @@ from bokeh.models import (
     DateRangeSlider,
     Select,
     BoxSelectTool,
+    TabPanel,
+    Tabs,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -1025,17 +1027,40 @@ def make_msat_targets_map(
     if file_list is not None:
         if public:
             note_div = Div(
-                width=340,
+                width=1000,
                 text="""
-            <font size=3 color="teal"><b>Notes:</b></font></br>
-            Hover on target polygons to see more information on a given target.</br>
-            The scatter plot shows the time series of individual collections.</br>
-            When hovering on a target on the map, it is highlighted in red on the map, and all collection over that target are highlighted in red in the scatter plot.</br>
-            Clicking on a target on the map will copy the images paths to all the collects in that target.</br>
-            Clicking on a collect on the scatter plot will pop up the Level3 image for that collection. 
+            MethaneSAT observes over a set of targets indicated by polygons on the map. We call each MethaneSAT "snapshot" a collection.<br><br>
+            Hover on target polygons to see more information on a given target.<br><br>
+            The scatter plot shows the time series of individual collections.<br><br>
+            When hovering on a target on the map, it is highlighted in red on the map, and all collections over that target are highlighted in red in the scatter plot.<br><br>
+            Clicking on a target on the map will copy the image paths to all the collections in that target.<br><br>
+            Clicking on a collection on the scatter plot will pop-up the Level 3 image for that collection.<br><br>
+            The images show the total column dry-air mole fraction of methane (XCH<sub>4</sub>) as well as surface albedo at 1628 nm.<br><br>
+            The XCH<sub>4</sub> colorbar range in the images is set to median(XCH<sub>4</sub>)&plusmn2*standard_deviation(XCH<sub>4</sub>), with the standard deviation capped at 65 ppb.<br><br>
+
+            <font size='2' color='teal'><b>Other ways to select images:</b></font><br><br>
+            Note the toolbar options on the top right of each plot.<br>
+            The Box_Select tool in the map can be used to copy to clipboard the image paths to all the collections of the selected targets.<br><br>
+            There is a date range slider and a button below the scatter plot to select image paths in a given date range.<br><br>
+            Use the dropdown to list target IDs in a specific country, and the button below to copy all the image paths of collections in that country.<br><br>
+
+            <font size='2' color='orange'><b>Disclaimer:</b></font><br><br>
+
+            The L3 images available here are an early preview, the underlying data is subject to change before the official MethaneSAT public L3 data release.<br><br>
+
+            The data has undergone automated quality checks and expert review but the images may still contain artifacts. For example concentration at the edges of clouds may appear anomalous, and some striping may be apparent in the flight direction.<br><br>
+
+            <font size='2' color='teal'><b>Data access:</b></font><br><br>
+
+            The images presented here don't all have publicly available data yet.
+
+            To discover available data visit <a href="https://www.methanesat.org/data">https://www.methanesat.org/data</a> to find links to the MethaneSAT web portal and Google Earth Engine.<br><br>
+
+            <font size='2' color='teal'><b>Contact:</b></font><br><br>
+            <a href="https://www.methanesat.org/contact">https://www.methanesat.org/contact</a>
             """,
             )
-            layout = Row(
+            map = Row(
                 bokeh_plot,
                 Column(
                     inp,
@@ -1047,10 +1072,13 @@ def make_msat_targets_map(
                     country_input,
                     country_div,
                     country_button,
-                    note_div,
                     creation_time_div,
                 ),
             )
+            map.sizing_mode = "scale_both"
+            main_tab = TabPanel(child=map, title="Map")
+            notes_tab = TabPanel(child=note_div, title="Information")
+            layout = Tabs(tabs=[main_tab, notes_tab])
         elif is_L2 or image_bucket is not None or google_drive_id is not None:
             layout = Row(
                 bokeh_plot,
