@@ -282,9 +282,12 @@ def main():
 
     if args.qaqc_filter:
         filter_df = pd.read_csv(
-            args.qaqc_filter, names=["target", "collection", "reason"], skiprows=1
+            args.qaqc_filter,
+            names=["target", "collection", "reason"],
+            dtype={"target": int, "collection": str, "reason": "str"},
+            skiprows=1,
         )
-        filter_targets = filter_df[filter_df["collection"].isna()]["target"].values.astype(int)
+        filter_targets = filter_df[filter_df["collection"].isna()]["target"].values
 
     # loop over bucket files, download the data file, make the png plot, upload the png, remove the downloaded data file
     for t in td:
