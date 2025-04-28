@@ -662,7 +662,7 @@ def make_msat_targets_map(
                 });;
 
             console.log(file_path);
-            if (key==='image_gdrive_file' || key==='QAQC Plots' || file_path.endsWith(".png")) {
+            if (key==='image_gdrive_file' || file_path.endsWith(".png") || file_path.endsWith(".html")) {
                 window.open(file_path,'_blank');
             }
 
