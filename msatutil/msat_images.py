@@ -253,6 +253,11 @@ def main():
         default=None,
         help="if given, also pull the L2 QAQC csv files to filter out some scenes",
     )
+    parser.add_argument(
+        "--qaqc-filter",
+        default=None,
+        help="full path to a csv file listing collects to exclude",
+    )
     args = parser.parse_args()
 
     td = get_target_dict(args.file_list)
@@ -275,6 +280,12 @@ def main():
     else:
         raise Exception("Couldn't recognize the file type")
 
+    if args.qaqc_filter:
+        filter_df = pd.read_csv(
+            args.qaqc_filter, names=["target", "collection", "reason"], skiprows=1
+        )
+        filter_targets = filter_df[filter_df["collection"].isna()]["target"].values.astype(int)
+
     # loop over bucket files, download the data file, make the png plot, upload the png, remove the downloaded data file
     for t in td:
         for c in td[t]:
@@ -286,7 +297,13 @@ def main():
                 if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
                     continue
-                if args.qaqc_list:
+                if args.qaqc_filter:  # "manual" filter
+                    if t in filter_targets or c in filter_df["collection"].values:
+                        print(f"Filtered out: {gs_file}")
+                        if png_file.exists():
+                            os.remove(png_file)
+                        continue
+                if args.qaqc_list:  # automated filter
                     qc_gs_file = qcd[t][c][p]
                     downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
                     os.system(
@@ -294,7 +311,7 @@ def main():
                     )
                     do_plot = qaqc_filter(downloaded_qc_file)
                     if not do_plot:
-                        print(f"Filtered out: {qc_gs_file}")
+                        print(f"Filtered out: {gs_file}")
                         if png_file.exists():
                             os.remove(png_file)
                         continue
