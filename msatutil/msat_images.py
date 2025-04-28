@@ -306,9 +306,10 @@ def main():
                 if args.qaqc_list:  # automated filter
                     qc_gs_file = qcd[t][c][p]
                     downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
-                    os.system(
-                        f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
-                    )
+                    if not downloaded_qc_file.exists():
+                        os.system(
+                            f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
+                        )
                     skip_plot = qaqc_filter(downloaded_qc_file)
                     if skip_plot:
                         print(f"Filtered out (auto) for {skip_plot}: {gs_file}")
@@ -331,8 +332,6 @@ def main():
                 finally:
                     if downloaded_file.exists():
                         os.remove(downloaded_file)
-                    if args.qaqc_list and downloaded_qc_file.exists():
-                        os.remove(downloaded_qc_file)
 
     # upload the pngs to the given bucket
     if args.overwrite:
