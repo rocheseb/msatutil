@@ -72,7 +72,7 @@ def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
         / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
     )
 
-    return gs_posixpath_to_str(qaqc_file_path)
+    return gs_posixpath_to_str(qaqc_file_path).replace("gs://", "https://storage.cloud.google.com/")
 
 
 def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
@@ -660,7 +660,7 @@ def make_msat_targets_map(
                 });;
 
             console.log(file_path);
-            if (key==='image_gdrive_file' || file_path.endsWith(".png")) {
+            if (key==='image_gdrive_file' || key==='QAQC Plots' || file_path.endsWith(".png")) {
                 window.open(file_path,'_blank');
             }
 
