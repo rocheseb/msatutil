@@ -23,16 +23,26 @@ def qaqc_filter(qaqc_file) -> bool:
     if any(data["status"] == "fail"):
         return False
 
-    # Don't include scenes more than 70% flagged
-    flag_fraction = float(data.loc[data["var"] == "CH4 flagged fraction"].iloc[0].value)
-    if flag_fraction > 0.7:
-        return False
-
     # Don't include scenes with more than 5% missing frames
     missing_frames_fraction = float(
         data.loc[data["var"] == "Missing frames fraction"].iloc[0].value
     )
     if missing_frames_fraction > 0.05:
+        return False
+
+    # Don't include scenes with less than 300 frames
+    number_of_frames = float(data.loc[data["var"] == "Number of frames"].iloc[0].value)
+    if number_of_frames < 300:
+        return False
+
+    # Don't include scenes more than 70% flagged
+    flag_fraction = float(data.loc[data["var"] == "CH4 flagged fraction"].iloc[0].value)
+    if flag_fraction > 0.7:
+        return False
+
+    # Don't include scenes where the non-flagged XCH4 standard deviation > 100 ppb
+    xch4_std = float(data.loc[data["var"] == "XCH4 flag0 STD"].iloc[0].value)
+    if xch4_std > 100:
         return False
 
     # Don't include scenes with anomalous delta_pressure that could be contaminated by aerosols
