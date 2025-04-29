@@ -1035,6 +1035,7 @@ def make_msat_targets_map(
             When hovering on a target on the map, it is highlighted in red on the map, and all collections over that target are highlighted in red in the scatter plot.<br><br>
             Clicking on a target on the map will copy the image paths to all the collections in that target.<br><br>
             Clicking on a collection on the scatter plot will pop-up the Level 3 image for that collection.<br><br>
+            <font color='deepskyblue'><b>Cal/Val</b></font> targets are used for Calibration or Validation and consist of background targets and/or targets that cover ground-based instruments from <a href='https://tccondata.org/'>TCCON</a> or <a href='https://www.imk-asf.kit.edu/english/COCCON.php'>COCCON</a> that also measure methane.<br><br>
             The images show the total column dry-air mole fraction of methane (XCH<sub>4</sub>) as well as surface albedo at 1628 nm.<br><br>
             The XCH<sub>4</sub> colorbar range in the images is set to median(XCH<sub>4</sub>)&plusmn2*standard_deviation(XCH<sub>4</sub>), with the standard deviation capped at 65 ppb.<br><br>
 
