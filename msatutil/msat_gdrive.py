@@ -27,7 +27,7 @@ def upload_file(
         outfile (str): full path to file to upload
         service_account_file (str): full path to the Google Drive API service account file
         folder_id (str): Google Drive folder ID, must have been shared with the service account
-        overwrite (bool): if True, don't overwrite files with the same name
+        overwrite (bool): if True, overwrite files with the same name
     Outputs:
         (str): direct link to the uploaded file
     """
