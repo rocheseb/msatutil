@@ -184,10 +184,11 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
     return d
 
 
-def get_target_dict_from_images(file_list: str) -> dict:
+def get_target_dict_from_images(file_list: str, public_bucket: Optional[str] = None) -> dict:
     """
     Inputs:
         file_list (str): full path to input file listing MSAT bucket paths to images
+        public_bucket (Optional[str]): use to generate links to a different bucket
     Outputs:
         d (dict): dictionary of targets by target/collect/processing_id
     """
@@ -222,7 +223,11 @@ def get_target_dict_from_images(file_list: str) -> dict:
             old_p = list(d[t][c].keys())[0]
             if p < old_p:
                 continue
-        d[t][c] = {p: gs_posixpath_to_str(i).replace("gs://", "https://storage.cloud.google.com/")}
+        if public_bucket:
+            file_link = str(Path("https://storage.cloud.google.com") / public_bucket / i.name)
+        else:
+            file_link = gs_posixpath_to_str(i).replace("gs://", "https://storage.cloud.google.com/")
+        d[t][c] = {p: file_link}
 
     return d
 
@@ -253,6 +258,7 @@ def make_msat_targets_map(
     google_drive_id: Optional[str] = None,
     service_account_file: Optional[str] = None,
     public: bool = False,
+    public_bucket: Optional[str] = None,
 ):
     """
     Read the list of targets from the infile geojson file
@@ -304,7 +310,7 @@ def make_msat_targets_map(
     if file_list is not None:
         map_tools += ["box_select"]
         if public:
-            td = get_target_dict_from_images(file_list)
+            td = get_target_dict_from_images(file_list, public_bucket)
         else:
             td = get_target_dict(file_list, gs_posixpath_to_str)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
@@ -1161,6 +1167,11 @@ def main():
         action="store_true",
         help="if given, generate a public map that only shows targets with at least 1 collect and only links to images",
     )
+    parser.add_argument(
+        "--public-bucket",
+        default=None,
+        help="Use to change the path of the image links to a different bucket",
+    )
     args = parser.parse_args()
 
     make_msat_targets_map(
@@ -1172,6 +1183,7 @@ def main():
         args.google_drive_id,
         args.service_account_file,
         args.public,
+        args.public_bucket,
     )
 
 
