@@ -314,11 +314,14 @@ def make_msat_targets_map(
         else:
             td = get_target_dict(file_list, gs_posixpath_to_str)
         is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
-        vdims += ["ncollections", "collections", "target_code"]
-        hover_tooltips += [("# Collects", "@ncollections"), ("target code", "@target_code")]
+        vdims += ["ncollections", "collections"]
+        hover_tooltips += [("# Collects", "@ncollections")]
         gdf["ncollections"] = 0
         gdf["collections"] = ""
-        gdf["target_code"] = "***"
+        if not public:
+            vdims += ["target_code"]
+            hover_tooltips += [("target code", "@target_code")]
+            gdf["target_code"] = "***"
         scatter_df_columns = [
             "File",
             "tid",
@@ -371,9 +374,10 @@ def make_msat_targets_map(
                 gdf.loc[gdf["id"] == t, "image_gdrive_files"] = "\n".join(
                     [gdrive_td[t][c][p] or "" for c in td[t] for p in td[t][c]]
                 )
-            id_code = list(td[t].keys())[0][4:-1]
-            gdf.loc[gdf["id"] == t, "target_code"] = id_code
-            id_code_map[id_code] = t
+            if not public:
+                id_code = list(td[t].keys())[0][4:-1]
+                gdf.loc[gdf["id"] == t, "target_code"] = id_code
+                id_code_map[id_code] = t
             for c in td[t]:
                 for p in td[t][c]:
                     columns = [td[t][c][p], t, c, p] + list(
@@ -536,19 +540,20 @@ def make_msat_targets_map(
     )
 
     if file_list is not None:
-        target_code_div = Div(text="Target ID:", width=300)
-        target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
-        target_code_inp.js_on_change(
-            "value",
-            CustomJS(
-                args={"id_code_map": id_code_map, "target_code_div": target_code_div},
-                code="""
-                target_code_div.text = id_code_map[cb_obj.value] !== undefined 
-                    ? 'Target ID: ' + id_code_map[cb_obj.value] 
-                    : 'No collects with this code';
-                """,
-            ),
-        )
+        if not public:
+            target_code_div = Div(text="Target ID:", width=300)
+            target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
+            target_code_inp.js_on_change(
+                "value",
+                CustomJS(
+                    args={"id_code_map": id_code_map, "target_code_div": target_code_div},
+                    code="""
+                    target_code_div.text = id_code_map[cb_obj.value] !== undefined 
+                        ? 'Target ID: ' + id_code_map[cb_obj.value] 
+                        : 'No collects with this code';
+                    """,
+                ),
+            )
 
         taptool = bokeh_plot.select_one(TapTool)
         taptool_callback_args = {"poly_source": poly_source}
@@ -1071,7 +1076,7 @@ def make_msat_targets_map(
                 bokeh_plot,
                 Column(
                     inp,
-                    Row(legend_div, Column(target_code_inp, target_code_div)),
+                    legend_div,
                     fig,
                     date_slider,
                     date_slider_info_div,
