@@ -310,7 +310,11 @@ def main():
                 if args.qaqc_filter:  # "manual" filter
                     if t in filter_targets or c in filter_df["collection"].values:
                         print(f"Filtered out (manual): {gs_file}")
-                        log.loc[len(log)] = [t, c, p, "Excluded by manual review"]
+                        if c in filter_df["collection"].values:
+                            reason = filter_df.loc[filter_df["collection"] == c]["reason"].values[0]
+                        else:
+                            reason = filter_df.loc[filter_df["target"] == t]["reason"].values[0]
+                        log.loc[len(log)] = [t, c, p, f"Excluded by manual review: {reason}"]
                         if png_file.exists():
                             os.remove(png_file)
                         continue
