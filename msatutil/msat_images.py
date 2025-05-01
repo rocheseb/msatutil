@@ -258,6 +258,11 @@ def main():
         default=None,
         help="full path to a csv file listing collects to exclude",
     )
+    parser.add_argument(
+        "--log-file",
+        default="msat_images.log",
+        help="Full path to the output log file listing collection that pass/fail the image generation",
+    )
     args = parser.parse_args()
 
     td = get_target_dict(args.file_list)
@@ -289,6 +294,7 @@ def main():
         )
         filter_targets = filter_df[filter_df["collection"].isna()]["target"].values
 
+    log = pd.DataFrame(columns=["target_ID", "collection_ID", "processing_ID", "status"])
     # loop over bucket files, download the data file, make the png plot, upload the png, remove the downloaded data file
     for t in td:
         for c in td[t]:
@@ -299,10 +305,12 @@ def main():
                 )
                 if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
+                    log.loc[len(log)] = [t, c, p, "No L2 qaqc file found"]
                     continue
                 if args.qaqc_filter:  # "manual" filter
                     if t in filter_targets or c in filter_df["collection"].values:
                         print(f"Filtered out (manual): {gs_file}")
+                        log.loc[len(log)] = [t, c, p, "Excluded by manual review"]
                         if png_file.exists():
                             os.remove(png_file)
                         continue
@@ -316,10 +324,12 @@ def main():
                     skip_plot = qaqc_filter(downloaded_qc_file)
                     if skip_plot:
                         print(f"Filtered out (auto) for {skip_plot}: {gs_file}")
+                        log.loc[len(log)] = [t, c, p, f"Excluded by automated filter: {skip_plot}"]
                         if png_file.exists():
                             os.remove(png_file)
                         continue
                 if not args.overwrite and png_file.exists():
+                    log.loc[len(log)] = [t, c, p, "pass"]
                     continue
                 try:
                     downloaded_file = Path(args.download_dir) / gs_file.name
@@ -331,10 +341,13 @@ def main():
                     )
                 except Exception:
                     print(f"Could not make the plot for {gs_file}")
+                    log.loc[len(log)] = [t, c, p, "Cloud not make the plot"]
                     continue
                 finally:
                     if downloaded_file.exists():
                         os.remove(downloaded_file)
+                log.loc[len(log)] = [t, c, p, "pass"]
+    log.to_csv(args.log_file, index=False)
 
     # upload the pngs to the given bucket
     if args.overwrite:
