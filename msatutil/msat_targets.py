@@ -1049,6 +1049,7 @@ def make_msat_targets_map(
             <font color='deepskyblue'><b>Cal/Val</b></font> targets are used for Calibration or Validation and consist of background targets and/or targets that cover ground-based instruments from <a href='https://tccondata.org/'>TCCON</a> or <a href='https://www.imk-asf.kit.edu/english/COCCON.php'>COCCON</a> that also measure methane.<br><br>
             The images show the total column dry-air mole fraction of methane (XCH<sub>4</sub>) as well as surface albedo at 1628 nm.<br><br>
             The XCH<sub>4</sub> colorbar range in the images is set to median(XCH<sub>4</sub>)&plusmn2*standard_deviation(XCH<sub>4</sub>), with the standard deviation capped at 65 ppb.<br><br>
+            Holes in the images result from data flagged in our quality analysis step, most frequent flags are over low signal footprints (water, shadows), and over clouds.<br><br>
 
             <font size='2' color='teal'><b>Other ways to select images:</b></font><br><br>
             Note the toolbar options on the top right of each plot.<br>
