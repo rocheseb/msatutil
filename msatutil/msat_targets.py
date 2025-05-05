@@ -358,6 +358,8 @@ def make_msat_targets_map(
         id_code_map = {}
 
         for t in td:
+            if t not in gdf["id"]:
+                continue
             gdf.loc[gdf["id"] == t, "collections"] = "\n".join(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
             )
