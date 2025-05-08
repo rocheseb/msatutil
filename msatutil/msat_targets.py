@@ -147,7 +147,7 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
         d (dict): dictionary of targets by target/collect/processing_id
     """
     with open(file_list, "r") as fin:
-        file_list = [Path(i) for i in fin.readlines()]
+        file_list = [Path(i.strip()) for i in fin.readlines()]
     is_L0 = "_L0_" in str(file_list[0])
     if is_L0:
         tindex = 2
@@ -193,7 +193,7 @@ def get_target_dict_from_images(file_list: str, public_bucket: Optional[str] = N
         d (dict): dictionary of targets by target/collect/processing_id
     """
     with open(file_list, "r") as fin:
-        file_list = [Path(i) for i in fin.readlines()]
+        file_list = [Path(i.strip()) for i in fin.readlines()]
 
     pattern = re.compile(
         r"^t(?P<target_id>\d+)"
