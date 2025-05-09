@@ -315,11 +315,7 @@ def main():
                         else:
                             reason = filter_df.loc[filter_df["target"] == t]["reason"].values[0]
                         log.loc[len(log)] = [t, c, p, f"Excluded by manual review: {reason}"]
-                        if png_file.exists():
-                            try:
-                                os.remove(png_file)
-                            except FileNotFoundError:
-                                pass
+                        png_file.unlink(missing_ok=True)
                         continue
                 if args.qaqc_list:  # automated filter
                     qc_gs_file = qcd[t][c][p]
@@ -332,11 +328,7 @@ def main():
                     if skip_plot:
                         print(f"Filtered out (auto) for {skip_plot}: {gs_file}")
                         log.loc[len(log)] = [t, c, p, f"Excluded by automated filter: {skip_plot}"]
-                        if png_file.exists():
-                            try:
-                                os.remove(png_file)
-                            except FileNotFoundError:
-                                pass
+                        png_file.unlink(missing_ok=True)
                         continue
                 if not args.overwrite and png_file.exists():
                     log.loc[len(log)] = [t, c, p, "pass"]
@@ -354,11 +346,7 @@ def main():
                     log.loc[len(log)] = [t, c, p, "Cloud not make the plot"]
                     continue
                 finally:
-                    if downloaded_file.exists():
-                        try:
-                            os.remove(downloaded_file)
-                        except FileNotFoundError:
-                            pass
+                    downloaded_file.unlink(missing_ok=True)
                 log.loc[len(log)] = [t, c, p, "pass"]
     log.to_csv(args.log_file, index=False)
 
