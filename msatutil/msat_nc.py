@@ -203,7 +203,7 @@ class msat_nc:
                 return (
                     da.from_array(self.nc_dset[varpath], chunks=read_chunks)
                     .rechunk(chunks)
-                    .astype(float)
+                    .astype(self.nc_dset[varpath].dtype)
                 )
             return self.nc_dset[varpath][tuple()].astype(float)
 
