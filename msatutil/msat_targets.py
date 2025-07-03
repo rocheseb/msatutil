@@ -149,10 +149,15 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
     with open(file_list, "r") as fin:
         file_list = [Path(i.strip()) for i in fin.readlines()]
     is_L0 = "_L0_" in str(file_list[0])
+    is_L4 = "_L4_" in str(file_list[0])
     if is_L0:
         tindex = 2
         cindex = 6
         pindex = 7
+    elif is_L4:
+        tindex = 3
+        cindex = 5
+        pindex = 6
     else:
         tindex = 3
         cindex = 5
@@ -407,8 +412,7 @@ def make_msat_targets_map(
         scatter_df["size"] = 4
     # end of if file_list is not None
 
-    if public:
-        gdf = gdf.loc[gdf["ncollections"] > 0]
+    gdf = gdf.loc[gdf["ncollections"] > 0]
 
     if public:
         base_map = GOOGLE_IMAGERY
@@ -548,7 +552,10 @@ def make_msat_targets_map(
             target_code_inp.js_on_change(
                 "value",
                 CustomJS(
-                    args={"id_code_map": id_code_map, "target_code_div": target_code_div},
+                    args={
+                        "id_code_map": id_code_map,
+                        "target_code_div": target_code_div,
+                    },
                     code="""
                     target_code_div.text = id_code_map[cb_obj.value] !== undefined 
                         ? 'Target ID: ' + id_code_map[cb_obj.value] 
@@ -626,7 +633,11 @@ def make_msat_targets_map(
             active_scroll="wheel_zoom",
         )
         scatter = fig.scatter(
-            "timestamps", "cumulcounts", source=scatter_source, color="color", size="size"
+            "timestamps",
+            "cumulcounts",
+            source=scatter_source,
+            color="color",
+            size="size",
         )
         scatter_hover = HoverTool(
             tooltips=[
@@ -740,7 +751,8 @@ def make_msat_targets_map(
             width=300,
         )
         date_slider_info_div = Div(
-            text=f"{scatter_df['counts'].sum()} collects in selected date range", width=400
+            text=f"{scatter_df['counts'].sum()} collects in selected date range",
+            width=400,
         )
         # callback to update a text Div with the number of collects in the selected date range
         date_slider_callback = CustomJS(
@@ -943,7 +955,10 @@ def make_msat_targets_map(
 
     country_div = Div(text="Target IDs in selected country:", width=300)
     country_input = Select(
-        value=None, options=sorted(list(set(gdf["country"]))), width=200, title="Get Target IDs in:"
+        value=None,
+        options=sorted(list(set(gdf["country"]))),
+        width=200,
+        title="Get Target IDs in:",
     )
     country_input_callback_code = """
         const countries = poly_source.data["country"];
@@ -1132,7 +1147,14 @@ def make_msat_targets_map(
     else:
         layout = Row(
             bokeh_plot,
-            Column(inp, legend_div, alpha_button, country_input, country_div, creation_time_div),
+            Column(
+                inp,
+                legend_div,
+                alpha_button,
+                country_input,
+                country_div,
+                creation_time_div,
+            ),
         )
 
     layout.sizing_mode = "scale_both"
