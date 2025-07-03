@@ -322,7 +322,7 @@ def save_static_plot_with_widgets(
             fig[0].add_tools(CrosshairTool(overlay=[width, height]))
         # make each subplot toolbar visible
         for plot in bokeh_plot.children:
-            fig[0].sizing_mode = "scale_both"
+            plot[0].sizing_mode = "scale_both"
             plot[0].toolbar_location = "right"
             plot[0].toolbar.visible = True
             plot[0].toolbar.logo = None
