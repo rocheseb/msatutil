@@ -415,12 +415,12 @@ def save_static_plot_with_widgets(
     if layout_title:
         text_settings = "font-family: 'Arial, sans-serif'; font-size: 24px; font-weight: bold;"
         flexbox_elements.append(
-            Div(text=f'<p style="{text_settings}">{layout_title}</p>', width=1000, height=30)
+            Div(text=f'<p style="{text_settings}">{layout_title}</p>', width=1200, height=30)
         )
     if layout_details:
         text_settings = "font-family: 'Arial, sans-serif'; font-size: 14px;"
         flexbox_elements.append(
-            Div(text=f'<p style="{text_settings}">{layout_details}</p>', width=1000, height=20)
+            Div(text=f'<p style="{text_settings}">{layout_details}</p>', width=1200, height=20)
         )
     flexbox_elements.append(maps_with_widgets)
     bokeh_layout = Column(*flexbox_elements)
