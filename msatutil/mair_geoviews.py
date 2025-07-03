@@ -285,6 +285,7 @@ def save_static_plot_with_widgets(
 
     # Convert the holoviews layout object to a bokeh object
     bokeh_plot = hv.render(plot, backend="bokeh")
+    bokeh_plot.sizing_mode = "scale_both"
 
     if type(bokeh_plot) is bokeh.models.plots.GridPlot:
         # Layout of multiple figures
@@ -316,6 +317,7 @@ def save_static_plot_with_widgets(
             fig[0].add_tools(CrosshairTool(overlay=[width, height]))
         # make each subplot toolbar visible
         for plot in bokeh_plot.children:
+            fig[0].sizing_mode = "scale_both"
             plot[0].toolbar_location = "right"
             plot[0].toolbar.visible = True
             plot[0].toolbar.logo = None
@@ -393,6 +395,11 @@ def save_static_plot_with_widgets(
     )
     palette_select.js_on_change("value", callback)
 
+    maps_widgets = Row(palette_select, alpha_slider, first_colorbar_low, first_colorbar_high)
+
+    maps_with_widgets = Column(bokeh_plot, maps_widgets)
+    maps_with_widgets.sizing_mode = "scale_both"
+
     flexbox_elements = []
     if layout_title:
         text_settings = "font-family: 'Arial, sans-serif'; font-size: 24px; font-weight: bold;"
@@ -404,11 +411,9 @@ def save_static_plot_with_widgets(
         flexbox_elements.append(
             Div(text=f'<p style="{text_settings}">{layout_details}</p>', width=1000, height=20)
         )
-    flexbox_elements.append(bokeh_plot)
-    flexbox_elements.append(
-        Row(palette_select, alpha_slider, first_colorbar_low, first_colorbar_high)
-    )
+    flexbox_elements.append(maps_with_widgets)
     bokeh_layout = Column(*flexbox_elements)
+    bokeh_layout.sizing_mode = "scale_both"
 
     with open(out_file, "w") as out:
         out.write(file_html(bokeh_layout, CDN, browser_tab_title, suppress_callback_warning=True))
