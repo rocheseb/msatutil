@@ -459,7 +459,7 @@ def main():
                 gs_file = td[t][c][p]
                 output_file = (
                     Path(args.out_dir)
-                    / f"{gs_file.parts[4 if args.use_mount else 3]}_{gs_file.name.replace('.nc',extension)}"
+                    / f"{gs_file.parts[5 if args.use_mount else 3]}_{gs_file.name.replace('.nc',extension)}"
                 )
                 if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
