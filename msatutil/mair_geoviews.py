@@ -129,6 +129,7 @@ def show_map(
     tools: list[str] = ["fullscreen"],
     pixel_resolution: Optional[tuple[float, float]] = None,
     clipping_colors: dict = {"NaN": (0, 0, 0, 0), "min": None, "max": None},
+    **opts,
 ):
     """
     Make a geoviews map of z overlayed on background_tile
@@ -261,6 +262,8 @@ def save_static_plot_with_widgets(
     layout_details: str = "",
     linked_colorbars: bool = False,
     exclude_links: list[str] = [],
+    high_color: Optional[str] = None,
+    low_color: Optional[str] = None,
 ) -> None:
     """
     Save the output of show_map to a html file
@@ -281,6 +284,8 @@ def save_static_plot_with_widgets(
         layout_details (str): more info to include below the title
         linked_colorbars (bool): if True, all colorbars will be updated by the colorbar limits inputs
         exclude_links (list[str]): when linked_colorbars is True, this lists plot title to exclude
+        high_color (Optional[str]): if given, set as the color above the max of the colorbar
+        low_color (Optional[str]): if given, set as the color below the min of the colorbar
     """
 
     # Convert the holoviews layout object to a bokeh object
@@ -331,10 +336,16 @@ def save_static_plot_with_widgets(
 
     if linked_colorbars:
         for colorbar in colorbar_list:
-            colorbar.color_mapper.high_color = "red"
+            if high_color:
+                colorbar.color_mapper.high_color = high_color
+            if low_color:
+                colorbar.color_mapper.low_color = low_color
     else:
         colorbar_list = [colorbar_list[0]]
-        colorbar_list[0].color_mapper.high_color = "red"
+        if high_color:
+            colorbar_list[0].color_mapper.high_color = high_color
+        if low_color:
+            colorbar_list[0].color_mapper.low_color = low_color
 
     # Numeric inputs for the first colorbar limits
     callback = CustomJS(
