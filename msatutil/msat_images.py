@@ -422,7 +422,7 @@ def main():
         for c in td[t]:
             for p in td[t][c]:
                 if args.use_mount:
-                    td[t][c][p].replace("gs://", "/mnt/gcs/")
+                    td[t][c][p] = td[t][c][p].replace("gs://", "/mnt/gcs/")
                 td[t][c][p] = Path(td[t][c][p])
                 if args.qaqc_list:
                     if args.use_mount:
