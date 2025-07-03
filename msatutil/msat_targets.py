@@ -58,23 +58,46 @@ def extract_timestamp(text: str) -> Optional[str]:
     return None
 
 
-def derive_L2_qaqc_path(l2pp_file_path: str) -> str:
+def derive_L2_html_path(l2pp_file_path: str) -> str:
     """
-    Return the qaqc path corresponding to a L2 post-processed file
+    Return the qaqc html path corresponding to a L2 post-processed file
 
     Input:
         l2pp_file_path (str): path to the L2 post-processed file
     Ouputs:
-        qaqc_file_path (str): path to the L2 qaqc file
+        html_file_path (str): path to the L2 qaqc file
     """
     l2pp_file_path = Path(l2pp_file_path)
-    qaqc_file_path = (
+    html_file_path = (
         l2pp_file_path.parent
         / "qaqc"
         / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
     )
 
-    return gs_posixpath_to_str(qaqc_file_path).replace("gs://", "https://storage.cloud.google.com/")
+    return gs_posixpath_to_str(html_file_path).replace("gs://", "https://storage.cloud.google.com/")
+
+
+def derive_L4_html_path(data_bucket_path: str, html_bucket: str) -> str:
+    """
+    Return the html path corresponding to a L4 .nc data file
+    This will assume each data file has an existing corresponding html file.
+
+    Input:
+        data_bucket_path (str): path to the data file
+        html_bucket (str): bucket path where the .html files are stored (start with gs://)
+    Ouputs:
+        html_file_path (str): path to the .html file
+    """
+    data_bucket_path = Path(data_bucket_path)
+
+    image_file_path = (
+        Path(html_bucket)
+        / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.html')}"
+    )
+
+    return gs_posixpath_to_str(image_file_path).replace(
+        "gs://", "https://storage.cloud.google.com/"
+    )
 
 
 def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
@@ -260,6 +283,7 @@ def make_msat_targets_map(
     title: str = "MethaneSAT targets",
     file_list: Optional[str] = None,
     image_bucket: Optional[str] = None,
+    html_bucket: Optional[str] = None,
     google_drive_id: Optional[str] = None,
     service_account_file: Optional[str] = None,
     public: bool = False,
@@ -318,7 +342,10 @@ def make_msat_targets_map(
             td = get_target_dict_from_images(file_list, public_bucket)
         else:
             td = get_target_dict(file_list, gs_posixpath_to_str)
-        is_L2 = "_L2_" in list(next(iter(next(iter(td.values())).values())).values())[0]
+        first_path = list(next(iter(next(iter(td.values())).values())).values())[0]
+        is_L2 = "_L2_" in first_path
+        is_L4 = "_L4_" in first_path
+        do_html = is_L2 or is_L4
         vdims += ["ncollections", "collections"]
         hover_tooltips += [("# Collects", "@ncollections")]
         gdf["ncollections"] = 0
@@ -336,11 +363,14 @@ def make_msat_targets_map(
             "country",
             "type",
         ]
-        if is_L2:
-            gdf["qaqc_files"] = ""
-            vdims += ["qaqc_files"]
-            scatter_df_columns += ["qaqc_file"]
-            qaqc_td = get_target_dict(file_list, derive_L2_qaqc_path)
+        if do_html:
+            gdf["html_files"] = ""
+            vdims += ["html_files"]
+            scatter_df_columns += ["html_file"]
+            if is_L2:
+                html_td = get_target_dict(file_list, derive_L2_html_path)
+            elif is_L4:
+                html_td = get_target_dict(file_list, derive_L4_html_path, html_bucket=html_bucket)
         if image_bucket is not None:
             gdf["image_gs_files"] = ""
             vdims += ["image_gs_files"]
@@ -369,9 +399,9 @@ def make_msat_targets_map(
                 [td[t][c][p] for c in td[t] for p in td[t][c]]
             )
             gdf.loc[gdf["id"] == t, "ncollections"] = len(list(td[t].keys()))
-            if is_L2:
-                gdf.loc[gdf["id"] == t, "qaqc_files"] = "\n".join(
-                    [qaqc_td[t][c][p] for c in td[t] for p in td[t][c]]
+            if do_html:
+                gdf.loc[gdf["id"] == t, "html_files"] = "\n".join(
+                    [html_td[t][c][p] for c in td[t] for p in td[t][c]]
                 )
             if image_bucket is not None:
                 gdf.loc[gdf["id"] == t, "image_gs_files"] = "\n".join(
@@ -390,8 +420,8 @@ def make_msat_targets_map(
                     columns = [td[t][c][p], t, c, p] + list(
                         gdf.loc[gdf["id"] == t, ["name", "country", "type"]].values[0]
                     )
-                    if is_L2:
-                        columns += [qaqc_td[t][c][p]]
+                    if do_html:
+                        columns += [html_td[t][c][p]]
                     if image_bucket is not None:
                         columns += [image_td[t][c][p]]
                     if google_drive_id is not None:
@@ -461,7 +491,7 @@ def make_msat_targets_map(
     if ('collections' in data) var collections = data['collections'];
     if ('ncollections' in data) var ncollections = Array.from(data['ncollections']);
     if ('target_code' in data) var target_code = data['target_code'];
-    if ('qaqc_files' in data) var qaqc_files = data['qaqc_files'];
+    if ('html_files' in data) var html_files = data['html_files'];
     if ('image_gs_files' in data) var image_gs_files = data['image_gs_files'];
     if ('image_gdrive_files' in data) var image_gdrive_files = data['image_gdrive_files'];
 
@@ -486,7 +516,7 @@ def make_msat_targets_map(
             ncollections.push(ncollections.splice(hid,1)[0]);
             data['ncollections'] = new Int32Array(ncollections);
         }
-        if ('qaqc_files' in data) qaqc_files.push(qaqc_files.splice(hid,1)[0]);
+        if ('html_files' in data) html_files.push(html_files.splice(hid,1)[0]);
         if ('image_gs_files' in data) image_gs_files.push(image_gs_files.splice(hid,1)[0]);
         if ('image_gdrive_files' in data) image_gdrive_files.push(image_gdrive_files.splice(hid,1)[0]);
         alpha.push(alpha.splice(hid,1)[0]);
@@ -567,13 +597,13 @@ def make_msat_targets_map(
         taptool = bokeh_plot.select_one(TapTool)
         taptool_callback_args = {"poly_source": poly_source}
         file_type_select_options = ["Data"]
-        if is_L2:
-            file_type_select_options += ["QAQC Plots"]
+        if do_html:
+            file_type_select_options += ["HTML Plots"]
         if image_bucket is not None:
             file_type_select_options += ["Images (gs)"]
         if google_drive_id is not None:
             file_type_select_options += ["Images (gdrive)"]
-        if is_L2 or image_bucket is not None or google_drive_id is not None:
+        if do_html or image_bucket is not None or google_drive_id is not None:
             file_type_select = Select(
                 options=file_type_select_options, value="Data", title="File type:"
             )
@@ -587,8 +617,8 @@ def make_msat_targets_map(
             if (typeof file_type_select !== 'undefined'){
                 if (file_type_select.value==='Data') {
                     key = 'collections';
-                } else if (file_type_select.value==='QAQC Plots') {
-                    key = 'qaqc_files';
+                } else if (file_type_select.value==='HTML Plots') {
+                    key = 'html_files';
                 } else if (file_type_select.value==='Images (gs)') {
                     key = 'image_gs_files';
                 } else if (file_type_select.value==='Images (gdrive)') {
@@ -655,7 +685,7 @@ def make_msat_targets_map(
 
         scatter_taptool = fig.select_one(TapTool)
         scatter_taptool_callback_args = {"scatter_source": scatter_source}
-        if is_L2 or image_bucket is not None:
+        if do_html or image_bucket is not None:
             scatter_taptool_callback_args["file_type_select"] = file_type_select
 
         # callback to copy the corresponding file path when clicking on the scatter points
@@ -667,8 +697,8 @@ def make_msat_targets_map(
             if (typeof file_type_select !== 'undefined'){
                 if (file_type_select.value==='Data') {
                     key = 'File';
-                } else if (file_type_select.value==='QAQC Plots') {
-                    key = 'qaqc_file';
+                } else if (file_type_select.value==='HTML Plots') {
+                    key = 'html_file';
                 } else if (file_type_select.value==='Images (gs)') {
                     key = 'image_gs_file';
                 } else if (file_type_select.value==='Images (gdrive)') {
@@ -772,7 +802,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "date_slider": date_slider,
         }
-        if is_L2 or image_bucket is not None or google_drive_id is not None:
+        if do_html or image_bucket is not None or google_drive_id is not None:
             date_slider_button_callback_args["file_type_select"] = file_type_select
         date_slider_button.js_on_click(
             CustomJS(
@@ -784,8 +814,8 @@ def make_msat_targets_map(
             if (typeof file_type_select !== 'undefined'){
                 if (file_type_select.value==='Data') {
                     key = 'File';
-                } else if (file_type_select.value==='QAQC Plots') {
-                    key = 'qaqc_file';
+                } else if (file_type_select.value==='HTML Plots') {
+                    key = 'html_file';
                 } else if (file_type_select.value==='Images (gs)') {
                     key = 'image_gs_file';
                 } else if (file_type_select.value==='Images (gdrive)') {
@@ -831,7 +861,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "poly_source": poly_source,
         }
-        if is_L2 or image_bucket is not None or google_drive_id is not None:
+        if do_html or image_bucket is not None or google_drive_id is not None:
             box_select_callback_args["file_type_select"] = file_type_select
         bokeh_plot.js_on_event(
             "selectiongeometry",
@@ -846,8 +876,8 @@ def make_msat_targets_map(
                 if (typeof file_type_select !== 'undefined'){
                     if (file_type_select.value==='Data') {
                         key = 'File';
-                    } else if (file_type_select.value==='QAQC Plots') {
-                        key = 'qaqc_file';
+                    } else if (file_type_select.value==='HTML Plots') {
+                        key = 'html_file';
                     } else if (file_type_select.value==='Images (gs)') {
                         key = 'image_gs_file';
                     } else if (file_type_select.value==='Images (gdrive)') {
@@ -990,7 +1020,7 @@ def make_msat_targets_map(
             "country_input": country_input,
             "scatter_source": scatter_source,
         }
-        if is_L2 or image_bucket is not None or google_drive_id is not None:
+        if do_html or image_bucket is not None or google_drive_id is not None:
             country_button_callback_args["file_type_select"] = file_type_select
         country_button = Button(label="Copy collection paths in selected country", width=300)
         country_button.js_on_click(
@@ -1003,8 +1033,8 @@ def make_msat_targets_map(
                 if (typeof file_type_select !== 'undefined'){
                     if (file_type_select.value==='Data') {
                         key = 'File';
-                    } else if (file_type_select.value==='QAQC Plots') {
-                        key = 'qaqc_file';
+                    } else if (file_type_select.value==='HTML Plots') {
+                        key = 'html_file';
                     } else if (file_type_select.value==='Images (gs)') {
                         key = 'image_gs_file';
                     } else if (file_type_select.value==='Images (gdrive)') {
@@ -1109,7 +1139,7 @@ def make_msat_targets_map(
             main_tab = TabPanel(child=map, title="Map")
             notes_tab = TabPanel(child=note_div, title="Information")
             layout = Tabs(tabs=[main_tab, notes_tab])
-        elif is_L2 or image_bucket is not None or google_drive_id is not None:
+        elif do_html or image_bucket is not None or google_drive_id is not None:
             layout = Row(
                 bokeh_plot,
                 Column(
@@ -1181,6 +1211,11 @@ def main():
         help="full path to the bucket where the collect pngs are stored",
     )
     parser.add_argument(
+        "--html-bucket",
+        default=None,
+        help="full path to the bucket where the collect html are stored",
+    )
+    parser.add_argument(
         "-g",
         "--google-drive-id",
         default=None,
@@ -1210,6 +1245,7 @@ def main():
         args.title,
         args.file_list,
         args.image_bucket,
+        args.html_bucket,
         args.google_drive_id,
         args.service_account_file,
         args.public,
