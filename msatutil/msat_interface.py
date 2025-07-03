@@ -550,11 +550,15 @@ class msat_collection:
 
         if self.use_dask:
             x = da.concatenate(x, axis=atrack_axis)
+            if np.issubdtype(x.dtype, np.integer):
+                x = x.astype(np.float16)
             x[da.greater(x, 1e29)] = np.nan
             if not self.is_l3:
                 x = x.rechunk({atrack_axis: "auto"})
         else:
             x = np.concatenate(x, axis=atrack_axis)
+            if np.issubdtype(x.dtype, np.integer):
+                x = x.astype(np.float16)
             x[np.greater(x, 1e29)] = np.nan
 
         x_slices = [slice(None) for i in range(len(x.shape))]
