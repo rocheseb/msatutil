@@ -5,9 +5,12 @@ import pandas as pd
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
+from msatutil.mair_geoviews import show_map, save_static_plot_with_widgets
 from msatutil.msat_interface import msat_collection
 from msatutil.msat_targets import get_target_dict
 from msatutil.msat_gdrive import upload_file as google_drive_upload
+from netCDF4 import Dataset
+from pyproj import Transformer
 
 
 def qaqc_filter(qaqc_file) -> bool:
@@ -208,6 +211,87 @@ def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
     l3.close()
 
 
+def read_l4(l4_file: str):
+    """
+    Inputs:
+        l4_file (str): full path to input L4_output_analysis file
+    Outputs:
+        lon (np.ndarray): array of longitudes
+        lat (np.ndarray): array of latitudes
+        flux (np.ndarray): array of CH4 mean flux (kg/hr)
+    """
+    with Dataset(l4_file) as l4:
+        x = l4["x"][:]
+        y = l4["y"][:]
+        flux = l4["mean_flux"][:]
+        transformer = Transformer.from_crs(l4.utm_crs_code, "epsg:4326", always_xy=True)
+
+    xx, yy = np.meshgrid(x, y, indexing="ij")
+
+    lon, lat = transformer.transform(xx, yy)
+
+    return lon, lat, flux
+
+
+def plot_l4(l4_file, outfile, title="", add_basemap=False, dpi=300):
+    matplotlib.use("Agg")
+    plt.ioff()
+
+    lon, lat, flux = read_l4(l4_file)
+
+    fig, ax = plt.subplots(figsize=(11, 8), dpi=dpi, sharey=True, constrained_layout=True)
+    ax.set_facecolor("black")
+    msat_collection.make_heatmap(
+        ax,
+        flux,
+        lon=lon,
+        lat=lat,
+        xlabel="Longitude",
+        ylabel="Latitude",
+        colorbar_label="Mean flux (kg/hr)",
+        over=None,
+        under=None,
+        add_basemap=add_basemap,
+        latlon_padding=0.2,
+        lab_prec=1,
+        latlon_step=1,
+        cb_fraction=0.03,
+        vmin=np.nanpercentile(flux, 25),
+        vmax=np.nanpercentile(flux, 75),
+    )
+    ax.set_title(title, fontsize=7)
+    fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
+    plt.close(fig)
+
+
+def plot_l4_html(l4_file, outfile, title=""):
+    """
+    Make a mean CH4 flux html map from a L4 file
+    """
+
+    lon, lat, flux = read_l4(l4_file)
+
+    plot = show_map(
+        lon,
+        lat,
+        flux,
+        width=850,
+        height=750,
+        cmap="viridis",
+        clim=(np.nanpercentile(flux, 25), np.nanpercentile(flux, 75)),
+        title="Mean CH4 flux (kg/hr)",
+    )
+
+    save_static_plot_with_widgets(
+        outfile,
+        plot,
+        cmap="viridis",
+        layout_title="MethaneSAT L4 CORE",
+        layout_details=l4_file.replace("/mnt/gcs", "gs://"),
+        browser_tab_title="MethaneSAT L4",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -263,6 +347,11 @@ def main():
         default="msat_images.log",
         help="Full path to the output log file listing collection that pass/fail the image generation",
     )
+    parser.add_argument(
+        "--html",
+        action="store_true",
+        help="if given, make html maps",
+    )
     args = parser.parse_args()
 
     td = get_target_dict(args.file_list)
@@ -282,6 +371,8 @@ def main():
         plot_func = plot_l2
     elif "_L3_" in first_value:
         plot_func = plot_l3
+    elif "_L4_" in first_value:
+        plot_func = plot_l4_html if args.html else plot_l4
     else:
         raise Exception("Couldn't recognize the file type")
 
