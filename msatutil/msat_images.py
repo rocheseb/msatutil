@@ -287,7 +287,7 @@ def plot_l4_html(l4_file, outfile, title=""):
         plot,
         cmap="viridis",
         layout_title="MethaneSAT L4 CORE",
-        layout_details=l4_file.replace("/mnt/gcs", "gs://"),
+        layout_details=l4_file.replace("/mnt/gcs/", "gs://"),
         browser_tab_title="MethaneSAT L4",
     )
 
