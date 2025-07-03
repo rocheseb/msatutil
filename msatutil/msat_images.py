@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from msatutil.mair_geoviews import show_map, save_static_plot_with_widgets
 from msatutil.msat_interface import msat_collection
-from msatutil.msat_targets import get_target_dict
+from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
 from msatutil.msat_gdrive import upload_file as google_drive_upload
 from netCDF4 import Dataset
 from pyproj import Transformer
@@ -317,14 +317,37 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
 
     plot = hv.Layout([l4_plot, l3_plot_xch4, l3_plot_albedo]).cols(2)
 
+    if l4_file.startswith("/mnt/gcs/"):
+        l4_file = l4_file.replace("/mnt/gcs/", "gs://")
+
     save_static_plot_with_widgets(
         outfile,
         plot,
         cmap="viridis",
         layout_title="MethaneSAT L4 CORE",
-        layout_details=l4_file.replace("/mnt/gcs/", "gs://"),
+        layout_details=l4_file,
         browser_tab_title="MethaneSAT L4",
     )
+
+
+def download_file(download_dir: str, p: Path, use_mount: bool) -> Path:
+    """
+    Inputs:
+        download_dir (str): full path to the directory where file will be downloaded
+        p (Path): file to download
+        use_mount (bool): if True, just return p
+    Outputs:
+        downloaded_file (Path): output file path
+    """
+    if use_mount:
+        return p
+
+    downloaded_file = Path(download_dir) / p.name
+
+    if not downloaded_file.exists():
+        os.system(f"gsutil cp {gs_posixpath_to_str(p)} {downloaded_file}")
+
+    return downloaded_file
 
 
 def main():
@@ -387,6 +410,9 @@ def main():
         action="store_true",
         help="if given, make html maps",
     )
+    parser.add_argument(
+        "--use-mount", action="store_true", help="if given, use /mnt/gcs/ instead of gs://"
+    )
     args = parser.parse_args()
 
     td = get_target_dict(args.file_list)
@@ -395,8 +421,12 @@ def main():
     for t in td:
         for c in td[t]:
             for p in td[t][c]:
+                if args.use_mount:
+                    td[t][c][p].replace("gs://", "/mnt/gcs/")
                 td[t][c][p] = Path(td[t][c][p])
                 if args.qaqc_list:
+                    if args.use_mount:
+                        qcd[t][c][p] = qcd[t][c][p].replace("gs://", "/mnt/gcs/")
                     qcd[t][c][p] = Path(qcd[t][c][p])
     first_value = list(next(iter(next(iter(td.values())).values())).values())[0].name
 
@@ -420,14 +450,16 @@ def main():
         )
         filter_targets = filter_df[filter_df["collection"].isna()]["target"].values
 
+    extension = ".html" if args.html else ".png"
     log = pd.DataFrame(columns=["target_ID", "collection_ID", "processing_ID", "status"])
     # loop over bucket files, download the data file, make the png plot, upload the png, remove the downloaded data file
     for t in td:
         for c in td[t]:
             for p in td[t][c]:
                 gs_file = td[t][c][p]
-                png_file = (
-                    Path(args.out_dir) / f"{gs_file.parts[3]}_{gs_file.name.replace('.nc','.png')}"
+                output_file = (
+                    Path(args.out_dir)
+                    / f"{gs_file.parts[3]}_{gs_file.name.replace('.nc',extension)}"
                 )
                 if args.qaqc_list and (t not in qcd or c not in qcd[t] or p not in qcd[t][c]):
                     print(f"No L2 qaqc corresponding to: {gs_file}")
@@ -441,46 +473,42 @@ def main():
                         else:
                             reason = filter_df.loc[filter_df["target"] == t]["reason"].values[0]
                         log.loc[len(log)] = [t, c, p, f"Excluded by manual review: {reason}"]
-                        png_file.unlink(missing_ok=True)
+                        output_file.unlink(missing_ok=True)
                         continue
                 if args.qaqc_list:  # automated filter
                     qc_gs_file = qcd[t][c][p]
-                    downloaded_qc_file = Path(args.download_dir) / qc_gs_file.name
-                    if not downloaded_qc_file.exists():
-                        os.system(
-                            f"gsutil cp {str(qc_gs_file).replace('gs:/','gs://')} {downloaded_qc_file}"
-                        )
+                    downloaded_qc_file = download_file(args.download_dir, qc_gs_file)
                     skip_plot = qaqc_filter(downloaded_qc_file)
                     if skip_plot:
                         print(f"Filtered out (auto) for {skip_plot}: {gs_file}")
                         log.loc[len(log)] = [t, c, p, f"Excluded by automated filter: {skip_plot}"]
-                        png_file.unlink(missing_ok=True)
+                        output_file.unlink(missing_ok=True)
                         continue
-                if not args.overwrite and png_file.exists():
+                if not args.overwrite and output_file.exists():
                     log.loc[len(log)] = [t, c, p, "pass"]
                     continue
                 try:
-                    downloaded_file = Path(args.download_dir) / gs_file.name
-                    os.system(f"gsutil cp {str(gs_file).replace('gs:/','gs://')} {downloaded_file}")
+                    downloaded_file = download_file(args.download_dir, gs_file, args.use_mount)
                     plot_func(
                         str(downloaded_file),
-                        png_file,
-                        title=os.path.splitext(png_file.name)[0],
+                        output_file,
+                        title=os.path.splitext(output_file.name)[0],
                     )
                 except Exception:
                     print(f"Could not make the plot for {gs_file}")
                     log.loc[len(log)] = [t, c, p, "Cloud not make the plot"]
                     continue
                 finally:
-                    downloaded_file.unlink(missing_ok=True)
+                    if not args.use_mount:
+                        downloaded_file.unlink(missing_ok=True)
                 log.loc[len(log)] = [t, c, p, "pass"]
     log.to_csv(args.log_file, index=False)
 
     # upload the pngs to the given bucket
     if args.overwrite:
-        os.system(f"gsutil -m cp {args.out_dir}/*.png {args.bucket}/")
+        os.system(f"gsutil -m cp {args.out_dir}/*{extension} {args.bucket}/")
     else:
-        os.system(f"gsutil -m cp -n {args.out_dir}/*.png {args.bucket}/")
+        os.system(f"gsutil -m cp -n {args.out_dir}/*{extension} {args.bucket}/")
 
     if args.google_drive_id is not None and args.service_account_file is not None:
         outfile_list = [os.path.join(args.out_dir, i) for i in os.listdir(args.out_dir)]
