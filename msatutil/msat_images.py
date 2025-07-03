@@ -2,6 +2,7 @@ import os
 import argparse
 import numpy as np
 import pandas as pd
+import holoviews as hv
 from pathlib import Path
 import matplotlib
 import matplotlib.pyplot as plt
@@ -219,25 +220,28 @@ def read_l4(l4_file: str):
         lon (np.ndarray): array of longitudes
         lat (np.ndarray): array of latitudes
         flux (np.ndarray): array of CH4 mean flux (kg/hr)
+        l3_file (str): full path to the corresponding L3 file
     """
     with Dataset(l4_file) as l4:
         x = l4["x"][:]
         y = l4["y"][:]
         flux = l4["mean_flux"][:]
         transformer = Transformer.from_crs(l4.utm_crs_code, "epsg:4326", always_xy=True)
+        l3_root = str(Path(*Path(l4_file).parts[:4])).replace("4", "3")
+        l3_file = l4["ProcessingMetadata"].level3_product.replace("[prod]", l3_root)
 
     xx, yy = np.meshgrid(x, y, indexing="ij")
 
     lon, lat = transformer.transform(xx, yy)
 
-    return lon, lat, flux
+    return lon, lat, flux, l3_file
 
 
 def plot_l4(l4_file, outfile, title="", add_basemap=False, dpi=300):
     matplotlib.use("Agg")
     plt.ioff()
 
-    lon, lat, flux = read_l4(l4_file)
+    lon, lat, flux, _ = read_l4(l4_file)
 
     fig, ax = plt.subplots(figsize=(11, 8), dpi=dpi, sharey=True, constrained_layout=True)
     ax.set_facecolor("black")
@@ -264,23 +268,54 @@ def plot_l4(l4_file, outfile, title="", add_basemap=False, dpi=300):
     plt.close(fig)
 
 
-def plot_l4_html(l4_file, outfile, title=""):
+def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
     """
     Make a mean CH4 flux html map from a L4 file
     """
 
-    lon, lat, flux = read_l4(l4_file)
+    lon, lat, flux, l3_file = read_l4(l4_file)
 
-    plot = show_map(
+    l4_plot = show_map(
         lon,
         lat,
         flux,
-        width=850,
-        height=750,
+        width=width,
+        height=height,
         cmap="viridis",
         clim=(np.nanpercentile(flux, 25), np.nanpercentile(flux, 75)),
         title="Mean CH4 flux (kg/hr)",
     )
+
+    l3 = msat_collection([l3_file])
+    vmin, vmax = select_colorscale(l3)
+    lon = l3.pmesh_prep("lon").compute()
+    lat = l3.pmesh_prep("lat").compute()
+    xch4 = l3.pmesh_prep("xch4").compute()
+    albedo = l3.pmesh_prep("albedo").compute()
+    l3_plot_xch4 = show_map(
+        lon,
+        lat,
+        xch4,
+        width=width,
+        height=height,
+        cmap="viridis",
+        clim=(vmin, vmax),
+        title="XCH4 (ppb)",
+        single_panel=True,
+    )
+    l3_plot_albedo = show_map(
+        lon,
+        lat,
+        albedo,
+        width=width,
+        height=height,
+        cmap="gray",
+        clim=(np.nanmin(albedo), np.nanmax(albedo)),
+        title="Albedo",
+        single_panel=True,
+    )
+
+    plot = hv.Layout([l4_plot, l3_plot_xch4, l3_plot_albedo]).cols(2)
 
     save_static_plot_with_widgets(
         outfile,
