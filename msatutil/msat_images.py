@@ -286,12 +286,12 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         title="Mean CH4 flux (kg/hr)",
     )
 
-    l3 = msat_collection([l3_file])
-    vmin, vmax = select_colorscale(l3)
-    lon = l3.pmesh_prep("lon").compute()
-    lat = l3.pmesh_prep("lat").compute()
-    xch4 = l3.pmesh_prep("xch4").compute()
-    albedo = l3.pmesh_prep("albedo").compute()
+    with msat_collection([l3_file]) as l3:
+        vmin, vmax = select_colorscale(l3)
+        lon = l3.pmesh_prep("lon").compute()
+        lat = l3.pmesh_prep("lat").compute()
+        xch4 = l3.pmesh_prep("xch4").compute()
+        albedo = l3.pmesh_prep("albedo").compute()
     l3_plot_xch4 = show_map(
         lon,
         lat,
