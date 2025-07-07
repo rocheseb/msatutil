@@ -172,15 +172,10 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
     with open(file_list, "r") as fin:
         file_list = [Path(i.strip()) for i in fin.readlines()]
     is_L0 = "_L0_" in str(file_list[0])
-    is_L4 = "_L4_" in str(file_list[0])
     if is_L0:
         tindex = 2
         cindex = 6
         pindex = 7
-    elif is_L4:
-        tindex = 3
-        cindex = 5
-        pindex = 6
     else:
         tindex = 3
         cindex = 5
@@ -922,16 +917,6 @@ def make_msat_targets_map(
     inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
     inp.js_on_change("value", inp_callback)
 
-    if public:
-        no_collect_legend = ""
-    else:
-        no_collect_legend = """
-        <div style="display:flex; align-items:center; margin-top:5px;">
-        <div style="width:15px; height:15px; background-color:lightgray; margin-right:5px;"></div>
-        <span>No collects</span>
-        </div>
-        """
-
     legend_div = Div(
         text=f"""
     <div style="padding:10px; width:150px;">
@@ -948,7 +933,6 @@ def make_msat_targets_map(
         <div style="width:15px; height:15px; background-color:deepskyblue; margin-right:5px;"></div>
         <span>Cal/Val</span>
       </div>
-      {no_collect_legend}
     </div>
     """
     )
