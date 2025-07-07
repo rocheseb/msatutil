@@ -260,8 +260,8 @@ def plot_l4(l4_file, outfile, title="", add_basemap=False, dpi=300):
         lab_prec=1,
         latlon_step=1,
         cb_fraction=0.03,
-        vmin=np.nanpercentile(flux, 25),
-        vmax=np.nanpercentile(flux, 75),
+        vmin=0,
+        vmax=np.nanpercentile(flux, 97.5),
     )
     ax.set_title(title, fontsize=7)
     fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
@@ -282,7 +282,7 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         width=width,
         height=height,
         cmap="viridis",
-        clim=(np.nanpercentile(flux, 25), np.nanpercentile(flux, 75)),
+        clim=(0, np.nanpercentile(flux, 97.5)),
         title="Mean CH4 flux (kg/hr)",
     )
 
