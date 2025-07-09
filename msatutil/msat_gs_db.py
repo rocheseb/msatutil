@@ -159,15 +159,15 @@ def main():
         "-i",
         "--infile",
         default=None,
+        help="input text file listing google storage paths, if not given it will be created",
     )
     args = parser.parse_args()
 
     if args.infile is None:
-        gs_command = f"gsutil -m ls -l gs://{args.gs_bucket_name}/**"
-        grep_command = 'grep "\.nc$"'
+        gs_command = f"gsutil -m ls -l gs://{args.gs_bucket_name}/**/*.nc"
         gs_data_file = f"{os.path.join(os.path.dirname(args.outfile),args.gs_bucket_name)}.txt"
 
-        command = f"{gs_command} | {grep_command} > {gs_data_file}"
+        command = f"{gs_command} > {gs_data_file}"
         print(f"Now running following command, may take several minutes to complete:\n {command}")
         subprocess.run(command, shell=True)
     else:
