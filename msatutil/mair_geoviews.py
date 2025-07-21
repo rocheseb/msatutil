@@ -471,6 +471,7 @@ def read_variables(
     option_axis_dim: str = "spectral_channel",
     apply_flag: Optional[str] = None,
     date_range=None,
+    srchstr="*.nc",
 ):
     var_list = []
     if in_path.endswith(".nc"):
@@ -499,7 +500,7 @@ def read_variables(
                 for var in variables
             ]
     else:
-        with get_msat(in_path, date_range=date_range) as msat_data:
+        with get_msat(in_path, date_range=date_range,srchstr=srchstr) as msat_data:
             # make the valid cross track check on the variable to plot
             # if it is as 3D variable make it on the longitude variable
             # sometimes longitude has 1 extra valid cross track on each side
@@ -596,6 +597,7 @@ def do_html_plot(
     custom_data: Optional[dict] = None,
     lat_offset: float = 0,
     lon_offset: float = 0,
+    srchstr: str = "*.nc",
 ) -> None:
     """
     Save a html plot of var from in_path
@@ -664,6 +666,7 @@ def do_html_plot(
             option=option,
             option_axis_dim=option_axis_dim,
             apply_flag=apply_flag,
+            srchstr=srchstr,
         )
         clim_list = [None for i in var_list]
         clim_list[0] = clim
