@@ -746,7 +746,7 @@ class msat_collection:
         kwargs["ax"] = ax
         for ids in tqdm(chunked_ids, total=len(chunked_ids)):
             kwargs["ids"] = ids
-            self.heatmap(**kwargs)
+            _ = self.heatmap(**kwargs)
 
     def save_geolocation(
         self,
@@ -1223,6 +1223,7 @@ class msat_collection:
         ylabel: str = "",
         title: str = "",
         cb_fraction: float = 0.04,
+        basic: bool = False,
         **kwargs,
     ):
         vmin = kwargs.get("vmin")
@@ -1249,13 +1250,16 @@ class msat_collection:
             ax.set_xlim(all_points[:, 0].min(), all_points[:, 0].max())
             ax.set_ylim(all_points[:, 1].min(), all_points[:, 1].max())
         elif lat is not None and lon is not None:
-            m = msat_collection._make_heatmap_with_background_tile(
-                ax,
-                lon,
-                lat,
-                x,
-                **kwargs,
-            )
+            if basic:
+                m = ax.pcolormesh(lon, lat, x, vmin=vmin, vmax=vmax, cmap=cmap)
+            else:
+                m = msat_collection._make_heatmap_with_background_tile(
+                    ax,
+                    lon,
+                    lat,
+                    x,
+                    **kwargs,
+                )
         else:
             # plotting against along-track and across-track indices
             m = ax.pcolormesh(x, **kwargs)
