@@ -552,7 +552,7 @@ class msat_collection:
             x = da.concatenate(x, axis=atrack_axis)
             if np.issubdtype(x.dtype, np.integer):
                 x = x.astype(np.float16)
-            x[da.greater(x, 1e29)] = np.nan
+            #x[da.greater(x, 1e29)] = np.nan
             if not self.is_l3:
                 x = x.rechunk({atrack_axis: "auto"})
         else:
