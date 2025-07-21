@@ -12,6 +12,7 @@ from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
 from msatutil.msat_gdrive import upload_file as google_drive_upload
 from netCDF4 import Dataset
 from pyproj import Transformer
+import gc
 
 
 def qaqc_filter(qaqc_file) -> bool:
@@ -69,11 +70,17 @@ def select_colorscale(mc: msat_collection) -> tuple[float, float]:
     Get the vmin and vmax that will be used for the XCH4 plot
     """
     if mc.is_l2:
-        xch4 = mc.pmesh_prep("product_co2proxy/xch4_co2proxy", use_valid_xtrack=True).compute()
+        xch4 = mc.pmesh_prep("product_co2proxy/xch4_co2proxy", use_valid_xtrack=True)
+        if mc.use_dask:
+            xch4 = xch4.compute()
     elif mc.is_l3:
-        xch4 = mc.pmesh_prep("xch4").compute()
+        xch4 = mc.pmesh_prep("xch4")
+        if mc.use_dask:
+            xch4 = xch4.compute()
     if mc.is_postproc:
-        flag = mc.pmesh_prep("product_co2proxy/main_quality_flag", use_valid_xtrack=True).compute()
+        flag = mc.pmesh_prep("product_co2proxy/main_quality_flag", use_valid_xtrack=True)
+        if mc.use_dask:
+            flag = flag.compute()
     else:
         flag = np.zeros(xch4.shape)
 
@@ -286,12 +293,12 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         title="Mean CH4 flux (kg/hr)",
     )
 
-    with msat_collection([l3_file]) as l3:
+    with msat_collection([l3_file],use_dask=False) as l3:
         vmin, vmax = select_colorscale(l3)
-        lon = l3.pmesh_prep("lon").compute()
-        lat = l3.pmesh_prep("lat").compute()
-        xch4 = l3.pmesh_prep("xch4").compute()
-        albedo = l3.pmesh_prep("albedo").compute()
+        lon = l3.pmesh_prep("lon")
+        lat = l3.pmesh_prep("lat")
+        xch4 = l3.pmesh_prep("xch4")
+        albedo = l3.pmesh_prep("albedo")
     l3_plot_xch4 = show_map(
         lon,
         lat,
@@ -328,6 +335,8 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         layout_details=l4_file,
         browser_tab_title="MethaneSAT L4",
     )
+    del lat,lon,xch4,albedo,flux,l4_plot,l3_plot_xch4,l3_plot_albedo,plot
+    gc.collect()
 
 
 def download_file(download_dir: str, p: Path, use_mount: bool) -> Path:
@@ -494,13 +503,14 @@ def main():
                         output_file,
                         title=os.path.splitext(output_file.name)[0],
                     )
-                except Exception:
-                    print(f"Could not make the plot for {gs_file}")
+                except Exception as e:
+                    print(f"Could not make the plot for {gs_file}",e)
                     log.loc[len(log)] = [t, c, p, "Cloud not make the plot"]
                     continue
                 finally:
                     if not args.use_mount:
                         downloaded_file.unlink(missing_ok=True)
+                    gc.collect()
                 log.loc[len(log)] = [t, c, p, "pass"]
     log.to_csv(args.log_file, index=False)
 
