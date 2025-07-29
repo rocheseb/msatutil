@@ -915,7 +915,6 @@ def create_plot_parser(**kwargs):
         help="if given, overwrite existing plots",
     )
     plot_parser.add_argument(
-        "-t",
         "--title",
         default="",
         help="Will be added to the plot titles",
