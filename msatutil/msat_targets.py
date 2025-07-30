@@ -283,6 +283,7 @@ def make_msat_targets_map(
     service_account_file: Optional[str] = None,
     public: bool = False,
     public_bucket: Optional[str] = None,
+    write: bool = True,
 ):
     """
     Read the list of targets from the infile geojson file
@@ -296,6 +297,8 @@ def make_msat_targets_map(
         google_drive_id (str): Google Drive folder ID, must have been shared with the service account
         service_account_file (str): full path to the service account file
         public (bool): if True, only link bucket images and only show targets with at least 1 collect
+        public_bucket (Optional[str]): can be given to change the bucket file links
+        write (bool): if True, write the html map file
     """
     gdf = gpd.read_file(infile)
 
@@ -1173,8 +1176,71 @@ def make_msat_targets_map(
 
     layout.sizing_mode = "scale_both"
 
+    if write:
+        with open(outfile, "w") as out:
+            out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
+
+    return layout
+
+
+def make_msat_targets_map_tabs(
+    infile: str,
+    outfile: str,
+    title: str = "MethaneSAT targets",
+    tab_title: Optional[list[str]] = None,
+    file_list: Optional[list[Optional[str]]] = None,
+    image_bucket: Optional[list[Optional[str]]] = None,
+    html_bucket: Optional[list[Optional[str]]] = None,
+    google_drive_id: Optional[list[Optional[str]]] = None,
+    service_account_file: Optional[str] = None,
+    public: bool = False,
+    public_bucket: Optional[list[Optional[str]]] = None,
+):
+    """
+    Read the list of targets from the infile geojson file
+
+    Inputs:
+        infile (str): input geojson file with all the target polygons
+        outfile (str): full path to the output html file
+        title (str): map title
+        tab_title (Optional[list[str]]): name of the tabs in the final layout
+        file_list (Optional[str]): full path to list of data bucket files
+        service_account_file (str): full path to the Google Drive API service account file
+        google_drive_id (str): Google Drive folder ID, must have been shared with the service account
+        service_account_file (str): full path to the service account file
+        public (bool): if True, only link bucket images and only show targets with at least 1 collect
+    """
+
+    tabs = [
+        TabPanel(
+            child=make_msat_targets_map(
+                infile,
+                outfile,
+                title,
+                file_list[i],
+                image_bucket[i],
+                html_bucket[i],
+                google_drive_id[i],
+                service_account_file,
+                public,
+                public_bucket[i],
+                write=False,
+            ),
+            title=v,
+        )
+        for i, v in enumerate(tab_title)
+    ]
+
+    layout = Tabs(tabs=tabs)
+
+    layout.sizing_mode = "scale_both"
+
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
+
+
+def none_or_str(value: str):
+    return None if value == "None" else value
 
 
 def main():
@@ -1185,24 +1251,37 @@ def main():
     parser.add_argument(
         "-f",
         "--file-list",
-        default=None,
+        nargs="+",
+        required=True,
+        type=none_or_str,
         help="full path to a list of bucket path, the collections file paths will be added to the targets hover tooltips",
+    )
+    parser.add_argument(
+        "--tab-title",
+        nargs="+",
+        help="when generating multi-level maps under tabs, sets the tab titles",
     )
     parser.add_argument(
         "-i",
         "--image-bucket",
-        default=None,
+        default=[None],
+        nargs="+",
+        type=none_or_str,
         help="full path to the bucket where the collect pngs are stored",
     )
     parser.add_argument(
         "--html-bucket",
-        default=None,
+        default=[None],
+        nargs="+",
+        type=none_or_str,
         help="full path to the bucket where the collect html are stored",
     )
     parser.add_argument(
         "-g",
         "--google-drive-id",
-        default=None,
+        default=[None],
+        nargs="+",
+        type=none_or_str,
         help="Google drive folder ID for uploading",
     )
     parser.add_argument(
@@ -1218,23 +1297,59 @@ def main():
     )
     parser.add_argument(
         "--public-bucket",
-        default=None,
+        default=[None],
+        type=none_or_str,
+        nargs="+",
         help="Use to change the path of the image links to a different bucket",
     )
     args = parser.parse_args()
 
-    make_msat_targets_map(
-        args.infile,
-        args.outfile,
-        args.title,
-        args.file_list,
-        args.image_bucket,
-        args.html_bucket,
-        args.google_drive_id,
-        args.service_account_file,
-        args.public,
-        args.public_bucket,
-    )
+    if len(args.file_list) == 1:
+        _ = make_msat_targets_map(
+            args.infile,
+            args.outfile,
+            args.title[0],
+            args.file_list[0],
+            args.image_bucket[0],
+            args.html_bucket[0],
+            args.google_drive_id[0],
+            args.service_account_file,
+            args.public,
+            args.public_bucket[0],
+        )
+    else:
+        if (
+            len(
+                set(
+                    [
+                        len(i)
+                        for i in [
+                            args.tab_title,
+                            args.file_list,
+                            args.public_bucket,
+                            args.image_bucket,
+                            args.html_bucket,
+                            args.google_drive_id,
+                        ]
+                    ]
+                )
+            )
+            != 1
+        ):
+            raise Exception("List arguments are not all the same length")
+        make_msat_targets_map_tabs(
+            args.infile,
+            args.outfile,
+            args.title,
+            args.tab_title,
+            args.file_list,
+            args.image_bucket,
+            args.html_bucket,
+            args.google_drive_id,
+            args.service_account_file,
+            args.public,
+            args.public_bucket,
+        )
 
 
 if __name__ == "__main__":
