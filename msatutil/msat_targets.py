@@ -597,24 +597,8 @@ def make_msat_targets_map(
                 ),
             )
 
-        # This Div will be used to show links to the collections after clicking on a polygon
-        popup_div = Div(
-            text="",
-            style={
-                "position": "absolute",
-                "left": "50px",
-                "top": "50px",
-                "background-color": "white",
-                "border": "1px solid black",
-                "padding": "8px",
-                "display": "none",
-                "white-space": "pre-wrap",
-                "overflow": "auto",
-            },
-        )
-
         taptool = bokeh_plot.select_one(TapTool)
-        taptool_callback_args = {"poly_source": poly_source, "popup_div": popup_div}
+        taptool_callback_args = {"poly_source": poly_source}
         file_type_select_options = ["Data"]
         if do_html:
             file_type_select_options += ["HTML Plots"]
@@ -647,6 +631,25 @@ def make_msat_targets_map(
                 key = 'collections';
             }
 
+            // Only create the popup div if it doesn't exist
+            if (!document.getElementById("popup-div")) {
+                const popup = document.createElement("div");
+                popup.id = "popup-div";
+                popup.style.position = "fixed";
+                popup.style.top = "20%";
+                popup.style.left = "40%";
+                popup.style.transform = "translate(-50%, -50%)";  // shift by half its size
+                popup.style.zIndex = "9999";
+                popup.style.background = "white";
+                popup.style.border = "1px solid black";
+                popup.style.padding = "10px";
+                popup.style.maxHeight = "200px";
+                popup.style.overflow = "auto";
+                popup.style.whiteSpace = "pre-wrap";
+                popup.style.display = "none";
+                document.body.appendChild(popup);
+            }
+
             if (selected_indices.length > 0) {
                 let all_collections = [];
                 
@@ -661,16 +664,15 @@ def make_msat_targets_map(
 
                 // Copy to clipboard
                 navigator.clipboard.writeText(combined_paths).then(function() {
-                    popup_div.style.left = (cb_obj.sx + 10) + "px";
-                    popup_div.style.top = (cb_obj.sy + 10) + "px";
-                    popup_div.text =
+                    const popup = document.getElementById("popup-div");
+                    popup.innerHTML =
                       `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
                       "<b>File paths copied:</b><br>" +
                       combined_paths.split('\\n').map(path => {
                         const name = path.split(/[/\\\\]/).pop();
                         return `<a href='${path}' target='_blank'>${name}</a>`;
                       }).join('<br>');
-                    popup_div.style.display = "block";
+                    popup.style.display = "block";
                 }, function(err) {
                     console.error('Failed to copy text: ', err);
                 });
@@ -737,11 +739,7 @@ def make_msat_targets_map(
             }
             const file_path = scatter_source.data[key][selected[selected.length-1]];
 
-            navigator.clipboard.writeText(file_path).then(function() {
-                    alert('File path copied to clipboard:\\n' + file_path);
-                }, function(err) {
-                    console.error('Failed to copy text: ', err);
-                });;
+            navigator.clipboard.writeText(file_path);
 
             console.log(file_path);
             if (key==='image_gdrive_file' || file_path.endsWith(".png") || file_path.endsWith(".html")) {
@@ -1163,7 +1161,6 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
-                    popup_div,
                 ),
             )
             map.sizing_mode = "scale_both"
@@ -1186,7 +1183,6 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
-                    popup_div,
                 ),
             )
         else:
@@ -1204,7 +1200,6 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
-                    popup_div,
                 ),
             )
     else:
