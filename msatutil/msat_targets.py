@@ -992,7 +992,9 @@ def make_msat_targets_map(
         if (alpha_button.button_type==="warning") {
             alpha_button.button_type = "primary";
             alpha_button.label = "Raise Polygon Alpha";
-            alpha.fill(0);
+            for (let i = 0; i < alpha.length; i++) {
+                alpha[i] = 0;
+            }
         } else {
             alpha_button.button_type = "warning";
             alpha_button.label = "Zero Polygon Alpha";
