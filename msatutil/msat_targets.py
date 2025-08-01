@@ -597,8 +597,24 @@ def make_msat_targets_map(
                 ),
             )
 
+        # This Div will be used to show links to the collections after clicking on a polygon
+        popup_div = Div(
+            text="",
+            style={
+                "position": "absolute",
+                "left": "50px",
+                "top": "50px",
+                "background-color": "white",
+                "border": "1px solid black",
+                "padding": "8px",
+                "display": "none",
+                "white-space": "pre-wrap",
+                "overflow": "auto",
+            },
+        )
+
         taptool = bokeh_plot.select_one(TapTool)
-        taptool_callback_args = {"poly_source": poly_source}
+        taptool_callback_args = {"poly_source": poly_source, "popup_div": popup_div}
         file_type_select_options = ["Data"]
         if do_html:
             file_type_select_options += ["HTML Plots"]
@@ -642,10 +658,19 @@ def make_msat_targets_map(
                 }
                 
                 const combined_paths = all_collections.join('\\n');
-                
+
                 // Copy to clipboard
                 navigator.clipboard.writeText(combined_paths).then(function() {
-                    alert('File paths copied to clipboard:\\n' + combined_paths);
+                    popup_div.style.left = (cb_obj.sx + 10) + "px";
+                    popup_div.style.top = (cb_obj.sy + 10) + "px";
+                    popup_div.text =
+                      `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
+                      "<b>File paths copied:</b><br>" +
+                      combined_paths.split('\\n').map(path => {
+                        const name = path.split(/[/\\\\]/).pop();
+                        return `<a href='${path}' target='_blank'>${name}</a>`;
+                      }).join('<br>');
+                    popup_div.style.display = "block";
                 }, function(err) {
                     console.error('Failed to copy text: ', err);
                 });
@@ -1136,6 +1161,7 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
+                    popup_div,
                 ),
             )
             map.sizing_mode = "scale_both"
@@ -1158,6 +1184,7 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
+                    popup_div,
                 ),
             )
         else:
@@ -1175,6 +1202,7 @@ def make_msat_targets_map(
                     country_div,
                     country_button,
                     creation_time_div,
+                    popup_div,
                 ),
             )
     else:
