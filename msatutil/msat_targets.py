@@ -281,6 +281,7 @@ def make_msat_targets_map(
     html_bucket: Optional[str] = None,
     google_drive_id: Optional[str] = None,
     service_account_file: Optional[str] = None,
+    nhighlight: Optional[int] = None,
     public: bool = False,
     public_bucket: Optional[str] = None,
     write: bool = True,
@@ -441,6 +442,10 @@ def make_msat_targets_map(
     # end of if file_list is not None
 
     gdf = gdf.loc[gdf["ncollections"] > 0]
+
+    if nhighlight is not None:
+        gdf.loc[gdf["ncollections"] > nhighlight, "default_color"] = "orange"
+        gdf.loc[gdf["ncollections"] > nhighlight, "fill_color"] = "orange"
 
     if public:
         base_map = GOOGLE_IMAGERY
@@ -844,7 +849,7 @@ def make_msat_targets_map(
             
             // Copy to clipboard
             navigator.clipboard.writeText(combined_paths).then(function() {
-                alert(`File paths copied to clipboard`);
+                alert(sorted_paths.length+` File paths copied to clipboard`);
             }, function(err) {
                 console.error('Failed to copy text: ', err);
             });
@@ -920,6 +925,16 @@ def make_msat_targets_map(
     inp_callback = CustomJS(args=inp_callback_args, code=inp_callback_code)
     inp.js_on_change("value", inp_callback)
 
+    if nhighlight is not None:
+        highlight_legend = f"""
+      <div style="display:flex; align-items:center; margin-top:5px;">
+        <div style="width:15px; height:15px; background-color:orange; margin-right:5px;"></div>
+        <span> >= {nhighlight} collections </span>
+      </div>
+        """
+    else:
+        highlight_legend = ""
+
     legend_div = Div(
         text=f"""
     <div style="padding:10px; width:150px;">
@@ -936,6 +951,7 @@ def make_msat_targets_map(
         <div style="width:15px; height:15px; background-color:deepskyblue; margin-right:5px;"></div>
         <span>Cal/Val</span>
       </div>
+      {highlight_legend}
     </div>
     """
     )
@@ -1193,6 +1209,7 @@ def make_msat_targets_map_tabs(
     html_bucket: Optional[list[Optional[str]]] = None,
     google_drive_id: Optional[list[Optional[str]]] = None,
     service_account_file: Optional[str] = None,
+    nhighlight: Optional[list[Optional[int]]] = None,
     public: bool = False,
     public_bucket: Optional[list[Optional[str]]] = None,
 ):
@@ -1222,6 +1239,7 @@ def make_msat_targets_map_tabs(
                 html_bucket[i],
                 google_drive_id[i],
                 service_account_file,
+                nhighlight[i],
                 public,
                 public_bucket[i],
                 write=False,
@@ -1241,6 +1259,10 @@ def make_msat_targets_map_tabs(
 
 def none_or_str(value: str):
     return None if value == "None" else value
+
+
+def none_or_int(value: str):
+    return None if value == "None" else int(value)
 
 
 def main():
@@ -1302,6 +1324,13 @@ def main():
         nargs="+",
         help="Use to change the path of the image links to a different bucket",
     )
+    parser.add_argument(
+        "--nhighlight",
+        default=[None],
+        type=none_or_int,
+        nargs="+",
+        help="Targets with >=nhighlight collections will be highlighted in orange",
+    )
     args = parser.parse_args()
 
     if len(args.file_list) == 1:
@@ -1314,6 +1343,7 @@ def main():
             args.html_bucket[0],
             args.google_drive_id[0],
             args.service_account_file,
+            args.nhighlight[0],
             args.public,
             args.public_bucket[0],
         )
@@ -1347,6 +1377,7 @@ def main():
             args.html_bucket,
             args.google_drive_id,
             args.service_account_file,
+            args.nhighlight,
             args.public,
             args.public_bucket,
         )
