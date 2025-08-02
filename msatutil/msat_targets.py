@@ -20,6 +20,7 @@ from bokeh.models import (
     BoxSelectTool,
     TabPanel,
     Tabs,
+    InlineStyleSheet,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -1274,7 +1275,30 @@ def make_msat_targets_map_tabs(
         for i, v in enumerate(tab_title)
     ]
 
-    layout = Tabs(tabs=tabs)
+    layout = Tabs(
+        tabs=tabs,
+        stylesheets=[
+            InlineStyleSheet(
+                css="""
+                    div.bk-tab {
+                        background-color: lightcyan;
+                        font-weight: bold;
+                        border-color: darkgray;
+                        color: teal;
+                    }
+                    div.bk-tab.bk-active {
+                        background-color: lightblue;
+                        border-color: teal;
+                        color: teal;
+                        font-weight: bold;
+                    }
+                    div.bk-header {
+                        border-bottom: 0px !important;
+                    }
+                    """
+            )
+        ],
+    )
 
     layout.sizing_mode = "scale_both"
 
