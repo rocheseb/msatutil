@@ -445,8 +445,8 @@ def make_msat_targets_map(
     gdf = gdf.loc[gdf["ncollections"] > 0]
 
     if nhighlight is not None:
-        gdf.loc[gdf["ncollections"] > nhighlight, "default_color"] = "orange"
-        gdf.loc[gdf["ncollections"] > nhighlight, "fill_color"] = "orange"
+        gdf.loc[gdf["ncollections"] >= nhighlight, "default_color"] = "orange"
+        gdf.loc[gdf["ncollections"] >= nhighlight, "fill_color"] = "orange"
 
     if public:
         base_map = GOOGLE_IMAGERY
