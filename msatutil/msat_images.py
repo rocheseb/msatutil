@@ -84,8 +84,8 @@ def select_colorscale(mc: msat_collection) -> tuple[float, float]:
     else:
         flag = np.zeros(xch4.shape)
 
-    med = np.nanmedian(xch4[flag == 0])
-    std = np.nanstd(xch4[flag == 0], ddof=1)
+    med = np.nanmedian(xch4[flag == 0].filled(np.nan))
+    std = np.nanstd(xch4[flag == 0].filled(np.nan), ddof=1)
 
     STD_THRESHOLD = 65  # ppb
     if std > STD_THRESHOLD:
