@@ -21,6 +21,7 @@ from bokeh.models import (
     TabPanel,
     Tabs,
     InlineStyleSheet,
+    GlyphRenderer,
 )
 from bokeh.embed import file_html
 from bokeh.resources import CDN
@@ -469,7 +470,14 @@ def make_msat_targets_map(
     bokeh_plot = hv.render(plot, backend="bokeh")
     bokeh_plot.sizing_mode = "scale_both"
 
-    poly_source = bokeh_plot.renderers[1].data_source
+    poly_renderer = None
+    for renderer in bokeh_plot.renderers:
+        if isinstance(renderer, GlyphRenderer) and hasattr(renderer.glyph, "fill_alpha"):
+            poly_renderer = renderer
+            break
+    if poly_renderer is None:
+        raise Exception("Could not find the polygons")
+    poly_source = poly_renderer.data_source
 
     inp = NumericInput(value=None, title="Highlight this target id:")
 
@@ -983,24 +991,24 @@ def make_msat_targets_map(
     alpha_button = Button(label="Zero Polygon Alpha", button_type="warning")
     # callback to change the alpha of the polygons
     alpha_button_callback = CustomJS(
-        args={"poly_source": poly_source, "alpha_button": alpha_button},
+        args={
+            "poly_source": poly_source,
+            "alpha_button": alpha_button,
+            "poly_renderer": poly_renderer,
+        },
         code="""
-        var alpha = poly_source.data["fill_alpha"];
-        const default_alpha = poly_source.data["default_alpha"];
+        var data = poly_source.data;
 
         if (alpha_button.button_type==="warning") {
             alpha_button.button_type = "primary";
             alpha_button.label = "Raise Polygon Alpha";
-            for (let i = 0; i < alpha.length; i++) {
-                alpha[i] = 0;
-            }
+            data['fill_alpha'] = Array(data["fill_alpha"].length).fill(0);
         } else {
             alpha_button.button_type = "warning";
             alpha_button.label = "Zero Polygon Alpha";
-            for (let i = 0; i < alpha.length; i++) {
-                alpha[i] = default_alpha[i];
-            }
+            data['fill_alpha'] = data['default_alpha'].slice();
         }
+        poly_renderer.glyph.fill_alpha = {field: 'fill_alpha'};
 
         poly_source.change.emit();
     """,
