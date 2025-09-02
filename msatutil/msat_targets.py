@@ -32,6 +32,10 @@ from typing import Optional, Callable
 from pathlib import Path, PosixPath
 import reverse_geocode
 from msatutil.msat_gdrive import get_file_link
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
+from bokeh.models import CategoricalColorMapper, ColorBar, FixedTicker
+from bokeh.events import DocumentReady
 
 gv.extension("bokeh")
 
@@ -336,7 +340,7 @@ def make_msat_targets_map(
         ("Type", "@type"),
     ]
 
-    map_tools = ["hover", "fullscreen", "tap"]
+    map_tools = ["hover", "fullscreen", "tap", "save"]
     if file_list is not None:
         map_tools += ["box_select"]
         if public:
@@ -449,6 +453,23 @@ def make_msat_targets_map(
         gdf.loc[gdf["ncollections"] >= nhighlight, "default_color"] = "orange"
         gdf.loc[gdf["ncollections"] >= nhighlight, "fill_color"] = "orange"
 
+    nmax = 10
+    cmap = cm.get_cmap("jet", nmax)
+    color_map = {val: mcolors.to_hex(cmap(min(i,nmax))) for i,val in enumerate(sorted(gdf["ncollections"].unique()))}
+    gdf["default_color"] = gdf["ncollections"].map(color_map)
+    gdf["fill_color"] = gdf["default_color"]
+    gdf["line_color"] = "black"
+    gdf["fill_alpha"] = 1
+    palette = [mcolors.to_hex(cmap(i)) for i in range(cmap.N)]
+    categories = [str(i) for i in range(1,11)]
+    categories[-1] = ">=10"
+    color_mapper = CategoricalColorMapper(palette=palette,factors=categories)
+    color_bar = ColorBar(
+            color_mapper=color_mapper,
+            location=(0,0),
+            height=400,
+            )
+
     if public:
         base_map = GOOGLE_IMAGERY
     else:
@@ -468,6 +489,7 @@ def make_msat_targets_map(
         )
     )
     bokeh_plot = hv.render(plot, backend="bokeh")
+    bokeh_plot.add_layout(color_bar, "right")
     bokeh_plot.sizing_mode = "scale_both"
 
     poly_renderer = None
