@@ -18,7 +18,7 @@ def make_hist(
     """
     x = x[np.isfinite(x)]
     
-    if "range" in kwargs:
+    if "range" in kwargs and kwargs["range"] is not None:
         rng_slice = (x > kwargs["range"][0]) & (x <= kwargs["range"][1])
     else:
         rng_slice = slice(None)
