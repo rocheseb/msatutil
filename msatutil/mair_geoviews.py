@@ -164,10 +164,13 @@ def show_map(
     quad = gv.project(gv.QuadMesh((x, y, z)))
 
     if clim is None:
-        # define color limits as mean +/- 3 std
-        mean_z = np.nanmean(z)
-        std_z = np.nanstd(z, ddof=1)
-        clim = (mean_z - 3 * std_z, mean_z + 3 * std_z)
+        z = np.ma.MaskedArray(z).filled(np.nan)
+        # define color limits as median +/- 3 std
+        # estimate std from IQR to eliminate outliers
+        med_z = np.nanmedian(z)
+        q25, q75 = np.nanpercentile(z)
+        std_z = 0.74 * (q75 - q25)
+        clim = (med_z - 3 * std_z, med_z + 3 * std_z)
 
     if pixel_resolution is not None:
         width_pixels, height_pixels = get_pixel_dims(
@@ -500,7 +503,7 @@ def read_variables(
                 for var in variables
             ]
     else:
-        with get_msat(in_path, date_range=date_range,srchstr=srchstr) as msat_data:
+        with get_msat(in_path, date_range=date_range, srchstr=srchstr) as msat_data:
             # make the valid cross track check on the variable to plot
             # if it is as 3D variable make it on the longitude variable
             # sometimes longitude has 1 extra valid cross track on each side
