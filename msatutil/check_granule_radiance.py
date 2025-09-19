@@ -1,9 +1,10 @@
-import os
 import argparse
-import pylab as plt
-from typing import Optional
+import os
 import warnings
+from typing import Optional
+
 import numpy as np
+import pylab as plt
 from msat_nc import msat_nc
 
 

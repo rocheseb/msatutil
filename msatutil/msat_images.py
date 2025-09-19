@@ -1,18 +1,20 @@
-import os
 import argparse
-import numpy as np
-import pandas as pd
-import holoviews as hv
+import gc
+import os
 from pathlib import Path
+
+import holoviews as hv
 import matplotlib
 import matplotlib.pyplot as plt
-from msatutil.mair_geoviews import show_map, save_static_plot_with_widgets
-from msatutil.msat_interface import msat_collection
-from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
-from msatutil.msat_gdrive import upload_file as google_drive_upload
+import numpy as np
+import pandas as pd
 from netCDF4 import Dataset
 from pyproj import Transformer
-import gc
+
+from msatutil.mair_geoviews import save_static_plot_with_widgets, show_map
+from msatutil.msat_gdrive import upload_file as google_drive_upload
+from msatutil.msat_interface import msat_collection
+from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
 
 
 def qaqc_filter(qaqc_file) -> bool:

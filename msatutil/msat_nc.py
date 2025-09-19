@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import os
-import numpy as np
-import netCDF4 as ncdf
-from typing import Optional, Tuple, Union, List, Dict
+from typing import Dict, List, Optional, Tuple, Union
+
 import dask.array as da
+import netCDF4 as ncdf
+import numpy as np
+
 from msatutil.msat_dset import msat_dset
 
 

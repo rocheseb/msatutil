@@ -1,45 +1,32 @@
 import warnings
 
 warnings.simplefilter("ignore")
-import os
-import numpy as np
 import argparse
 import inspect
+import os
+import subprocess
+from typing import List, Optional, Tuple, Union
 
 import bokeh
-from bokeh.models import (
-    CustomJS,
-    Slider,
-    Column,
-    Select,
-    Row,
-    Div,
-    Span,
-    CrosshairTool,
-    ColorBar,
-    NumericInput,
-)
-from bokeh.resources import CDN
-from bokeh.embed import file_html
-
+import geoviews as gv
 import holoviews as hv
+import numpy as np
+import panel as pn
+from bokeh.embed import file_html
+from bokeh.models import (ColorBar, Column, CrosshairTool, CustomJS, Div,
+                          NumericInput, Row, Select, Slider, Span)
+from bokeh.resources import CDN
+from geoviews.element import WMTS
+from geoviews.tile_sources import EsriImagery
 from holoviews.operation.datashader import rasterize
 from holoviews.plotting import list_cmaps
 from holoviews.plotting.util import process_cmap
-import geoviews as gv
-from geoviews.tile_sources import EsriImagery
-from geoviews.element import WMTS
-import panel as pn
 from pyproj import Transformer
 
-from msatutil.msat_dset import msat_dset, gs_list
-from msatutil.mair_ls import mair_ls
 from msatutil.mair_ls import create_parser as create_ls_parser
+from msatutil.mair_ls import mair_ls
+from msatutil.msat_dset import gs_list, msat_dset
 from msatutil.msat_interface import get_msat
-
-from typing import Optional, Tuple, Union, List
-
-import subprocess
 
 hv.extension("bokeh")
 

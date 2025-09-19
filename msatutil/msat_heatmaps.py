@@ -1,10 +1,12 @@
 from __future__ import annotations
-import os
+
 import argparse
-import numpy as np
+import os
+from typing import Annotated, Optional, Sequence, Tuple
+
 import matplotlib.pyplot as plt
-from typing import Optional, Sequence, Tuple, Annotated
 import netCDF4 as ncdf
+import numpy as np
 
 from msatutil.msat_interface import msat_collection
 

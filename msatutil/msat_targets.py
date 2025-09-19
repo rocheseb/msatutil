@@ -1,36 +1,23 @@
 import argparse
 import re
 from datetime import datetime
-import holoviews as hv
-import geoviews as gv
-from geoviews.element import WMTS
-from bokeh.models import (
-    TextInput,
-    NumericInput,
-    CustomJS,
-    Row,
-    Column,
-    TapTool,
-    Div,
-    ColumnDataSource,
-    HoverTool,
-    Button,
-    DateRangeSlider,
-    Select,
-    BoxSelectTool,
-    TabPanel,
-    Tabs,
-    InlineStyleSheet,
-    GlyphRenderer,
-)
-from bokeh.embed import file_html
-from bokeh.resources import CDN
-from bokeh.plotting import figure
-import pandas as pd
-import geopandas as gpd
-from typing import Optional, Callable
 from pathlib import Path, PosixPath
+from typing import Callable, Optional
+
+import geopandas as gpd
+import geoviews as gv
+import holoviews as hv
+import pandas as pd
 import reverse_geocode
+from bokeh.embed import file_html
+from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
+                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
+                          HoverTool, InlineStyleSheet, NumericInput, Row,
+                          Select, TabPanel, Tabs, TapTool, TextInput)
+from bokeh.plotting import figure
+from bokeh.resources import CDN
+from geoviews.element import WMTS
+
 from msatutil.msat_gdrive import get_file_link
 
 gv.extension("bokeh")

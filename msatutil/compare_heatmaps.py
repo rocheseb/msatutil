@@ -1,11 +1,13 @@
 from __future__ import annotations
-import numpy as np
-import matplotlib.pyplot as plt
-from datetime import datetime
-from typing import Optional, Sequence, Tuple, Annotated
 
-from msatutil.msat_interface import msat_collection
+from datetime import datetime
+from typing import Annotated, Optional, Sequence, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 from msatutil.make_hist import make_hist
+from msatutil.msat_interface import msat_collection
 
 
 def compare_heatmaps(

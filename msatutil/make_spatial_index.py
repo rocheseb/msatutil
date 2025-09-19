@@ -1,16 +1,18 @@
-import warnings
-import os
 import argparse
+import os
 import traceback
-from msatutil.msat_dset import msat_dset
-from msatutil.mair_ls import mair_ls_serial
+import warnings
+
+import fsspec
+import geopandas as gpd
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 from rasterio.features import shapes
-from shapely.geometry import MultiPolygon, shape
 from rasterio.transform import from_origin
-import fsspec
+from shapely.geometry import MultiPolygon, shape
+
+from msatutil.mair_ls import mair_ls_serial
+from msatutil.msat_dset import msat_dset
 
 # Use pyogrio for reading/writing large shapefiles
 engine = "pyogrio"
