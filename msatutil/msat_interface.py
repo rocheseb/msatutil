@@ -555,7 +555,7 @@ class msat_collection:
             x = da.concatenate(x, axis=atrack_axis)
             if np.issubdtype(x.dtype, np.integer):
                 x = x.astype(np.float16)
-            #x[da.greater(x, 1e29)] = np.nan
+            # x[da.greater(x, 1e29)] = np.nan
             if not self.is_l3:
                 x = x.rechunk({atrack_axis: "auto"})
         else:
@@ -1284,7 +1284,9 @@ class msat_collection:
         elif vmin is None and vmax is None:
             extend = "neither"
 
-        plt.colorbar(m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction, pad=0.02)
+        has_cbar = any([hasattr(c,"colorbar") and c.colorbar is not None for c in ax.collections])
+        if not has_cbar:
+            plt.colorbar(m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction, pad=0.02)
 
         ax.set_title(title)
         ax.set_xlabel(xlabel)
