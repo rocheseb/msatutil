@@ -1229,8 +1229,6 @@ def main():
             background_tile_name_list=args.background_tile,
             num_samples_threshold=args.filter_num_samples,
             pixel_ratio=args.pixel_ratio,
-            add_standalone_imagery=args.add_standalone_imagery,
-            ncols=args.ncols,
             pixel_resolution=args.pixel_resolution,
         )
 
