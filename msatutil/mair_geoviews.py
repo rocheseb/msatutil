@@ -155,7 +155,7 @@ def show_map(
         # define color limits as median +/- 3 std
         # estimate std from IQR to eliminate outliers
         med_z = np.nanmedian(z)
-        q25, q75 = np.nanpercentile(z)
+        q25, q75 = np.nanpercentile(z,[25,75])
         std_z = 0.74 * (q75 - q25)
         clim = (med_z - 3 * std_z, med_z + 3 * std_z)
 
