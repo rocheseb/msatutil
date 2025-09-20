@@ -1,10 +1,11 @@
 import argparse
-import os
-import pandas as pd
 import multiprocessing
-from tqdm import tqdm
-from typing import Optional, Union
+import os
 import subprocess
+from typing import Optional, Union
+
+import pandas as pd
+from tqdm import tqdm
 
 
 def parse_dark_file_path_star(args):

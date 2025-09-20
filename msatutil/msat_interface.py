@@ -1,34 +1,37 @@
 from __future__ import annotations
-import os
-import sys
-import glob
-import re
-import numpy as np
-import netCDF4 as ncdf
-from datetime import datetime
-import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.collections import PolyCollection
-import contextily as ctx
-from pyproj import Transformer
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-import matplotlib.font_manager as fm
-from shapely.geometry import Polygon
+
 import argparse
-from msatutil.msat_nc import msat_nc, MSATError
+import glob
+import os
+import pickle
+import re
+import sys
+import warnings
 from collections import OrderedDict
-from typing import Optional, Sequence, Tuple, Union, Annotated, List, Dict
+from datetime import datetime
+from typing import Annotated, Dict, List, Optional, Sequence, Tuple, Union
+
+import contextily as ctx
 import dask
 import dask.array as da
+import matplotlib
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+import netCDF4 as ncdf
+import numpy as np
 from dask.diagnostics import ProgressBar
+from matplotlib.collections import PolyCollection
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+from pyproj import Transformer
 from scipy.interpolate import griddata
-from scipy.spatial import Delaunay
 from scipy.interpolate.interpnd import _ndim_coords_from_arrays
-import pickle
+from scipy.spatial import Delaunay
+from shapely.geometry import Polygon
 from tqdm import tqdm
+
 from msatutil.make_hist import make_hist
 from msatutil.msat_dset import gs_list
-import warnings
+from msatutil.msat_nc import MSATError, msat_nc
 
 GOOGLE_TILE_SOURCE = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
 

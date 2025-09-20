@@ -1,45 +1,32 @@
 import warnings
 
 warnings.simplefilter("ignore")
-import os
-import numpy as np
 import argparse
 import inspect
+import os
+import subprocess
+from typing import List, Optional, Tuple, Union
 
 import bokeh
-from bokeh.models import (
-    CustomJS,
-    Slider,
-    Column,
-    Select,
-    Row,
-    Div,
-    Span,
-    CrosshairTool,
-    ColorBar,
-    NumericInput,
-)
-from bokeh.resources import CDN
-from bokeh.embed import file_html
-
+import geoviews as gv
 import holoviews as hv
+import numpy as np
+import panel as pn
+from bokeh.embed import file_html
+from bokeh.models import (ColorBar, Column, CrosshairTool, CustomJS, Div,
+                          NumericInput, Row, Select, Slider, Span)
+from bokeh.resources import CDN
+from geoviews.element import WMTS
+from geoviews.tile_sources import EsriImagery
 from holoviews.operation.datashader import rasterize
 from holoviews.plotting import list_cmaps
 from holoviews.plotting.util import process_cmap
-import geoviews as gv
-from geoviews.tile_sources import EsriImagery
-from geoviews.element import WMTS
-import panel as pn
 from pyproj import Transformer
 
-from msatutil.msat_dset import msat_dset, gs_list
-from msatutil.mair_ls import mair_ls
 from msatutil.mair_ls import create_parser as create_ls_parser
+from msatutil.mair_ls import mair_ls
+from msatutil.msat_dset import gs_list, msat_dset
 from msatutil.msat_interface import get_msat
-
-from typing import Optional, Tuple, Union, List
-
-import subprocess
 
 hv.extension("bokeh")
 
@@ -164,10 +151,13 @@ def show_map(
     quad = gv.project(gv.QuadMesh((x, y, z)))
 
     if clim is None:
-        # define color limits as mean +/- 3 std
-        mean_z = np.nanmean(z)
-        std_z = np.nanstd(z, ddof=1)
-        clim = (mean_z - 3 * std_z, mean_z + 3 * std_z)
+        z = np.ma.MaskedArray(z).filled(np.nan)
+        # define color limits as median +/- 3 std
+        # estimate std from IQR to eliminate outliers
+        med_z = np.nanmedian(z)
+        q25, q75 = np.nanpercentile(z)
+        std_z = 0.74 * (q75 - q25)
+        clim = (med_z - 3 * std_z, med_z + 3 * std_z)
 
     if pixel_resolution is not None:
         width_pixels, height_pixels = get_pixel_dims(
@@ -500,7 +490,7 @@ def read_variables(
                 for var in variables
             ]
     else:
-        with get_msat(in_path, date_range=date_range,srchstr=srchstr) as msat_data:
+        with get_msat(in_path, date_range=date_range, srchstr=srchstr) as msat_data:
             # make the valid cross track check on the variable to plot
             # if it is as 3D variable make it on the longitude variable
             # sometimes longitude has 1 extra valid cross track on each side

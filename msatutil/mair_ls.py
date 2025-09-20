@@ -1,10 +1,11 @@
 import argparse
-from typing import Optional, Any
-from msatutil.msat_dset import cloud_file
+import re
+from typing import Any, Optional, Union
+
 import numpy as np
 import pandas as pd
-import re
-from typing import Union
+
+from msatutil.msat_dset import cloud_file
 
 
 def load_dataframe(in_path: Union[str, pd.DataFrame]) -> pd.DataFrame:

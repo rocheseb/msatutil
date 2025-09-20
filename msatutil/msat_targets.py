@@ -1,35 +1,23 @@
 import argparse
 import re
 from datetime import datetime
-import holoviews as hv
-import geoviews as gv
-from geoviews.element import WMTS
-from bokeh.models import (
-    TextInput,
-    NumericInput,
-    CustomJS,
-    Row,
-    Column,
-    TapTool,
-    Div,
-    ColumnDataSource,
-    HoverTool,
-    Button,
-    DateRangeSlider,
-    Select,
-    BoxSelectTool,
-    TabPanel,
-    Tabs,
-    InlineStyleSheet,
-)
-from bokeh.embed import file_html
-from bokeh.resources import CDN
-from bokeh.plotting import figure
-import pandas as pd
-import geopandas as gpd
-from typing import Optional, Callable
 from pathlib import Path, PosixPath
+from typing import Callable, Optional
+
+import geopandas as gpd
+import geoviews as gv
+import holoviews as hv
+import pandas as pd
 import reverse_geocode
+from bokeh.embed import file_html
+from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
+                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
+                          HoverTool, InlineStyleSheet, NumericInput, Row,
+                          Select, TabPanel, Tabs, TapTool, TextInput)
+from bokeh.plotting import figure
+from bokeh.resources import CDN
+from geoviews.element import WMTS
+
 from msatutil.msat_gdrive import get_file_link
 
 gv.extension("bokeh")
@@ -469,7 +457,14 @@ def make_msat_targets_map(
     bokeh_plot = hv.render(plot, backend="bokeh")
     bokeh_plot.sizing_mode = "scale_both"
 
-    poly_source = bokeh_plot.renderers[1].data_source
+    poly_renderer = None
+    for renderer in bokeh_plot.renderers:
+        if isinstance(renderer, GlyphRenderer) and hasattr(renderer.glyph, "fill_alpha"):
+            poly_renderer = renderer
+            break
+    if poly_renderer is None:
+        raise Exception("Could not find the polygons")
+    poly_source = poly_renderer.data_source
 
     inp = NumericInput(value=None, title="Highlight this target id:")
 
@@ -983,24 +978,24 @@ def make_msat_targets_map(
     alpha_button = Button(label="Zero Polygon Alpha", button_type="warning")
     # callback to change the alpha of the polygons
     alpha_button_callback = CustomJS(
-        args={"poly_source": poly_source, "alpha_button": alpha_button},
+        args={
+            "poly_source": poly_source,
+            "alpha_button": alpha_button,
+            "poly_renderer": poly_renderer,
+        },
         code="""
-        var alpha = poly_source.data["fill_alpha"];
-        const default_alpha = poly_source.data["default_alpha"];
+        var data = poly_source.data;
 
         if (alpha_button.button_type==="warning") {
             alpha_button.button_type = "primary";
             alpha_button.label = "Raise Polygon Alpha";
-            for (let i = 0; i < alpha.length; i++) {
-                alpha[i] = 0;
-            }
+            data['fill_alpha'] = Array(data["fill_alpha"].length).fill(0);
         } else {
             alpha_button.button_type = "warning";
             alpha_button.label = "Zero Polygon Alpha";
-            for (let i = 0; i < alpha.length; i++) {
-                alpha[i] = default_alpha[i];
-            }
+            data['fill_alpha'] = data['default_alpha'].slice();
         }
+        poly_renderer.glyph.fill_alpha = {field: 'fill_alpha'};
 
         poly_source.change.emit();
     """,

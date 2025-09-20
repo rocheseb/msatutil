@@ -1,10 +1,11 @@
 import os
 import re
+from typing import Union
+
 from google.cloud import storage
 from google.cloud.storage.blob import Blob
 from google.cloud.storage.client import Client
 from netCDF4 import Dataset
-from typing import Union
 
 
 class msat_dset(Dataset):
