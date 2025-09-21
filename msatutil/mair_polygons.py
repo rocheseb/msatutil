@@ -101,6 +101,7 @@ def mair_polygons(
     output_file: str = "mair_polygons.geojson",
     simplify_npoints: Optional[int] = None,
     use_mount: bool = False,
+    min_rotated_rectangle: bool = False,
 ):
 
     td = get_target_dict(l3_mosaic_list)
@@ -137,6 +138,9 @@ def mair_polygons(
                         ]
     gdf = gpd.GeoDataFrame(gd, crs="EPSG:4326")
 
+    if min_rotated_rectangle:
+        gdf["geometry"] = gdf["geometry"].apply(lambda x: x.minimum_rotated_rectangle)
+
     gdf.to_file(output_file, driver="GeoJSON")
 
 
@@ -163,9 +167,21 @@ def main():
         action="store_true",
         help="if given use local mount for gcs paths",
     )
+    parser.add_argument(
+        "-r",
+        "--min-rotated-rectangle",
+        action="store_true",
+        help="if given, make tight-fitting rectangles for the polygons",
+    )
     args = parser.parse_args()
 
-    mair_polygons(args.l3_file_list, args.output_file, args.simplify_npoints, args.use_mount)
+    mair_polygons(
+        args.l3_file_list,
+        args.output_file,
+        args.simplify_npoints,
+        args.use_mount,
+        args.min_rotated_rectangle,
+    )
 
 
 if __name__ == "__main__":

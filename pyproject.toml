@@ -66,6 +66,9 @@ mairhtml = "msatutil.mair_geoviews:main"
 mairls = "msatutil.mair_ls:main"
 msattargets = "msatutil.msat_targets:main"
 msatimages = "msatutil.msat_images:main"
+mairtargets = "msatutil.mair_targets:main"
+mairpolygons = "msatutil.mair_polygons:main"
+maircommands = "msatutil.mair_mosaic_plot_commands:main"
 
 [tool.setuptools_scm]
 write_to = "msatutil/_version.py"
