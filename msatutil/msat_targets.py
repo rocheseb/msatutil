@@ -10,10 +10,25 @@ import holoviews as hv
 import pandas as pd
 import reverse_geocode
 from bokeh.embed import file_html
-from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
-                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
-                          HoverTool, InlineStyleSheet, NumericInput, Row,
-                          Select, TabPanel, Tabs, TapTool, TextInput)
+from bokeh.models import (
+    BoxSelectTool,
+    Button,
+    Column,
+    ColumnDataSource,
+    CustomJS,
+    DateRangeSlider,
+    Div,
+    GlyphRenderer,
+    HoverTool,
+    InlineStyleSheet,
+    NumericInput,
+    Row,
+    Select,
+    TabPanel,
+    Tabs,
+    TapTool,
+    TextInput,
+)
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
@@ -25,16 +40,17 @@ gv.extension("bokeh")
 GOOGLE_IMAGERY = WMTS("https://mt1.google.com/vt/lyrs=s&x={X}&y={Y}&z={Z}", name="GoogleImagery")
 
 
-def extract_timestamp(text: str) -> Optional[str]:
+def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     """
     Get a YYYYMMDDTHHMMSS timestamp from a string
 
     Inputs:
         text (str): input text to match
+        case_a (bool): if True, search for YYYY/MM/DD
     Outputs:
         (Optional[str]): the timestamp (or None)
     """
-    if "_L0_" in text:
+    if "_L0_" in text or case_a:
         match = re.search(r"\d{4}/\d{2}/\d{2}", text)
         match_id = 0
         time_fmt = "%Y/%m/%d"
@@ -261,6 +277,43 @@ def get_country(lat: float, lon: float) -> Optional[str]:
     return country
 
 
+def plot_polygons(
+    gdf: gpd.GeoDataFrame,
+    vdims,
+    map_tools,
+    base_map,
+    hover_tooltips: list[tuple[str, str]],
+    title: str,
+):
+    polygons = gv.Polygons(gdf, vdims=vdims)
+    plot = base_map * polygons.opts(
+        hv.opts.Polygons(
+            tools=map_tools,
+            active_tools=["pan", "wheel_zoom", "tap"],
+            fill_color="fill_color",
+            fill_alpha="fill_alpha",
+            line_color="line_color",
+            width=1100,
+            height=800,
+            hover_tooltips=hover_tooltips,
+            title=title,
+        )
+    )
+    bokeh_plot = hv.render(plot, backend="bokeh")
+    bokeh_plot.sizing_mode = "scale_both"
+
+    poly_renderer = None
+    for renderer in bokeh_plot.renderers:
+        if isinstance(renderer, GlyphRenderer) and hasattr(renderer.glyph, "fill_alpha"):
+            poly_renderer = renderer
+            break
+    if poly_renderer is None:
+        raise Exception("Could not find the polygons")
+    poly_source = poly_renderer.data_source
+
+    return bokeh_plot, poly_source, poly_renderer
+
+
 def make_msat_targets_map(
     infile: str,
     outfile: str,
@@ -440,31 +493,9 @@ def make_msat_targets_map(
         base_map = GOOGLE_IMAGERY
     else:
         base_map = gv.tile_sources.EsriImagery()
-    polygons = gv.Polygons(gdf, vdims=vdims)
-    plot = base_map * polygons.opts(
-        hv.opts.Polygons(
-            tools=map_tools,
-            active_tools=["pan", "wheel_zoom", "tap"],
-            fill_color="fill_color",
-            fill_alpha="fill_alpha",
-            line_color="line_color",
-            width=1100,
-            height=800,
-            hover_tooltips=hover_tooltips,
-            title=title,
-        )
+    bokeh_plot, poly_source, poly_renderer = plot_polygons(
+        gdf, vdims, map_tools, base_map, hover_tooltips, title
     )
-    bokeh_plot = hv.render(plot, backend="bokeh")
-    bokeh_plot.sizing_mode = "scale_both"
-
-    poly_renderer = None
-    for renderer in bokeh_plot.renderers:
-        if isinstance(renderer, GlyphRenderer) and hasattr(renderer.glyph, "fill_alpha"):
-            poly_renderer = renderer
-            break
-    if poly_renderer is None:
-        raise Exception("Could not find the polygons")
-    poly_source = poly_renderer.data_source
 
     inp = NumericInput(value=None, title="Highlight this target id:")
 
