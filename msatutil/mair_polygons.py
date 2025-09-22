@@ -122,7 +122,10 @@ def mair_polygons(
             for p in td[c][f]:
                 areas = td[c][f][p].keys()
                 has_map = any(["priority-map" in i for i in areas])
+                has_target = any(["priority-target" in i for i in areas])
                 area_key = "priority-map" if has_map else "priority-target"
+                if not (has_map or has_target):
+                    area_key = list(td[c][f][p].values())[0]
                 for a in td[c][f][p]:
                     if area_key in a:
                         if use_mount:
