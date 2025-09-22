@@ -44,7 +44,7 @@ def msat_clear_area(
 
     qc_files = [d[t][c][p] + "\n" for t in d for c in d[t] for p in d[t][c] if c in l3_collections]
     with open("l2_qc_file_list.txt", "w") as f:
-        f.writlines(qc_files)
+        f.writelines(qc_files)
     os.system(f"cat l2_qc_file_list.txt | gsutil -m cp -n -I {qc_dir}/")
 
     l3_clear_list = []
@@ -55,7 +55,9 @@ def msat_clear_area(
             for p in d[t][c]:
                 qc = (
                     pd.read_csv(
-                        Path(qc_dir) / d[t][c][p].name, names=["var", "status", "value"], skiprows=1
+                        Path(qc_dir) / Path(d[t][c][p]).name,
+                        names=["var", "status", "value"],
+                        skiprows=1,
                     )[["var", "value"]]
                     .set_index("var")
                     .T
@@ -65,7 +67,7 @@ def msat_clear_area(
                     l3_clear_list += [dl3[t][c][l3_pid] + "\n"]
 
     with open(out_file, "w") as f:
-        f.writlines(l3_clear_list)
+        f.writelines(l3_clear_list)
 
 
 def main():
