@@ -480,7 +480,7 @@ def make_msat_targets_map(
         scatter_df = scatter_df.sort_values(by=["timestamps"]).reset_index()
         scatter_df["cumulcounts"] = scatter_df["counts"].cumsum()
         scatter_df["color"] = "#1f77b4"
-        scatter_df["size"] = 4
+        scatter_df["size"] = 10
     # end of if file_list is not None
 
     gdf = gdf.loc[gdf["ncollections"] > 0]
@@ -819,7 +819,7 @@ def make_msat_targets_map(
 
         for (let i = 0; i < ids.length; i++) {
             scatter_colors[i] = (ids[i] === selected_id) ? "red" : "#1f77b4";
-            scatter_size[i] = (ids[i] === selected_id) ? 8 : 4;
+            scatter_size[i] = (ids[i] === selected_id) ? 20 : 10;
         }
 
         scatter_source.change.emit();        

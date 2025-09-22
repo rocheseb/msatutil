@@ -286,7 +286,7 @@ def make_mair_targets_map(
     scatter_df = scatter_df.sort_values(by=["timestamps"]).reset_index()
     scatter_df["cumulcounts"] = scatter_df["counts"].cumsum()
     scatter_df["color"] = "#1f77b4"
-    scatter_df["size"] = 4
+    scatter_df["size"] = 10
 
     base_map = BASE_MAPS[imagery_source]
     bokeh_plot, poly_source, poly_renderer = plot_polygons(
@@ -642,7 +642,7 @@ def make_mair_targets_map(
 
     for (let i = 0; i < flight.length; i++) {
         scatter_colors[i] = (flight[i] === selected_flight) ? "red" : "#1f77b4";
-        scatter_size[i] = (flight[i] === selected_flight) ? 8 : 4;
+        scatter_size[i] = (flight[i] === selected_flight) ? 20 : 10;
     }
 
     scatter_source.change.emit(); 
