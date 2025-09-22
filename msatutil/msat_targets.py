@@ -10,25 +10,10 @@ import holoviews as hv
 import pandas as pd
 import reverse_geocode
 from bokeh.embed import file_html
-from bokeh.models import (
-    BoxSelectTool,
-    Button,
-    Column,
-    ColumnDataSource,
-    CustomJS,
-    DateRangeSlider,
-    Div,
-    GlyphRenderer,
-    HoverTool,
-    InlineStyleSheet,
-    NumericInput,
-    Row,
-    Select,
-    TabPanel,
-    Tabs,
-    TapTool,
-    TextInput,
-)
+from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
+                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
+                          HoverTool, InlineStyleSheet, NumericInput, Row,
+                          Select, TabPanel, Tabs, TapTool, TextInput)
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS

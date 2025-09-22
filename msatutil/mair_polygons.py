@@ -1,13 +1,13 @@
 import argparse
 from typing import Callable, Optional, Union
 
+import geopandas as gpd
 import numpy as np
 from affine import Affine
 from netCDF4 import Dataset
 from rasterio import features
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import unary_union
-import geopandas as gpd
 
 from msatutil.mair_targets import get_target_dict
 

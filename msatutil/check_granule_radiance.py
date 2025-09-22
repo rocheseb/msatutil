@@ -5,6 +5,7 @@ from typing import Optional
 
 import numpy as np
 import pylab as plt
+
 from msat_nc import msat_nc
 
 

@@ -1,5 +1,6 @@
 import argparse
 import re
+import warnings
 from datetime import datetime
 from pathlib import Path, PosixPath
 from typing import Callable, Optional
@@ -8,38 +9,19 @@ import geopandas as gpd
 import geoviews as gv
 import holoviews as hv
 import pandas as pd
+import reverse_geocode
 from bokeh.embed import file_html
-from bokeh.models import (
-    BoxSelectTool,
-    Button,
-    Column,
-    ColumnDataSource,
-    CustomJS,
-    DateRangeSlider,
-    Div,
-    GlyphRenderer,
-    HoverTool,
-    InlineStyleSheet,
-    Row,
-    Select,
-    TabPanel,
-    Tabs,
-    TapTool,
-    TextInput,
-)
+from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
+                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
+                          HoverTool, InlineStyleSheet, Row, Select, TabPanel,
+                          Tabs, TapTool, TextInput)
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
-import reverse_geocode
 
-from msatutil.msat_targets import (
-    GOOGLE_IMAGERY,
-    extract_timestamp,
-    gs_posixpath_to_str,
-    plot_polygons,
-    none_or_str,
-)
-import warnings
+from msatutil.msat_targets import (GOOGLE_IMAGERY, extract_timestamp,
+                                   gs_posixpath_to_str, none_or_str,
+                                   plot_polygons)
 
 warnings.simplefilter("ignore")
 
