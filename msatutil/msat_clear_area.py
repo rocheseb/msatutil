@@ -30,6 +30,7 @@ def msat_clear_area(
     qc_dir: str,
     flag_fraction_threshold: float,
     out_file: str,
+    download: bool,
 ):
     """
     Download L2 QAQC csv files.
@@ -42,10 +43,13 @@ def msat_clear_area(
 
     l3_collections = [c for t in dl3 for c in dl3[t]]
 
-    qc_files = [d[t][c][p] + "\n" for t in d for c in d[t] for p in d[t][c] if c in l3_collections]
-    with open("l2_qc_file_list.txt", "w") as f:
-        f.writelines(qc_files)
-    os.system(f"cat l2_qc_file_list.txt | gsutil -m cp -n -I {qc_dir}/")
+    if download:
+        qc_files = [
+            d[t][c][p] + "\n" for t in d for c in d[t] for p in d[t][c] if c in l3_collections
+        ]
+        with open("l2_qc_file_list.txt", "w") as f:
+            f.writelines(qc_files)
+        os.system(f"cat l2_qc_file_list.txt | gsutil -m cp -n -I {qc_dir}/")
 
     l3_clear_list = []
     for t in d:
@@ -53,16 +57,19 @@ def msat_clear_area(
             if c not in l3_collections:
                 continue
             for p in d[t][c]:
+                local_qc_path = Path(qc_dir) / Path(d[t][c][p]).name
+                if not local_qc_path.exists():
+                    continue
                 qc = (
                     pd.read_csv(
-                        Path(qc_dir) / Path(d[t][c][p]).name,
+                        local_qc_path,
                         names=["var", "status", "value"],
                         skiprows=1,
                     )[["var", "value"]]
                     .set_index("var")
                     .T
                 )
-                if float(qc["CH4 flagged fracttion"].value) < flag_fraction_threshold:
+                if float(qc["CH4 flagged fraction"].value) < flag_fraction_threshold:
                     l3_pid = list(dl3[t][c].keys())[0]
                     l3_clear_list += [dl3[t][c][l3_pid] + "\n"]
 
@@ -91,6 +98,9 @@ def main():
         default="msat_l3_clear_file_list.txt",
         help="full path to output list of files",
     )
+    parser.add_argument(
+        "--download", action="store_true", help="if given, download the qc csv files"
+    )
     args = parser.parse_args()
 
     msat_clear_area(
@@ -99,6 +109,7 @@ def main():
         args.qc_dir,
         args.flag_fraction_threshold,
         args.out_file,
+        args.download,
     )
 
 
