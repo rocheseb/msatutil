@@ -458,15 +458,21 @@ def make_mair_targets_map(
                   `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
                   "<b>File paths copied:</b><br>" +
                   combined_paths.split('\\n').map(path => {
+                    const reg = /\/\d{8}\//;
                     const parts = path.split(/[/\\\\]/);
                     const part6 = parts[6] ?? '';
+                    const part5 = parts[5] ?? '';
                     const part7 = parts[7] ?? '';
                     const part8 = parts[8] ?? '';
                     let name;
                     if (path.includes("_L3_") && path.includes(".html")) {
-                        name = part6 + ": " + parts[parts.length-3];
+                        name = part6 + ": " + parts[parts.length-3] + " HTML PLOT";
                     } else if (path.includes("_L3_") && path.includes(".nc")) {
-                        name = part7 + ": " + parts[parts.length-3];
+                        if (reg.test(path)) {
+                            name = part5 + ": " + parts[parts.length-3] + " DATA FILE";
+                        } else {
+                            name = part7 + ": " + parts[parts.length-3] + " DATA FILE";
+                        }
                     } else if (path.includes(".pdf")) {
                         name = part8 + " QAQC report";
                     } else {
@@ -563,15 +569,21 @@ def make_mair_targets_map(
               `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
               "<b>File paths copied:</b><br>" +
               combined_paths.split('\\n').map(path => {
+                const reg = /\/\d{8}\//;
                 const parts = path.split(/[/\\\\]/);
                 const part6 = parts[6] ?? '';
+                const part5 = parts[5] ?? '';
                 const part7 = parts[7] ?? '';
                 const part8 = parts[8] ?? '';
                 let name;
                 if (path.includes("_L3_") && path.includes(".html")) {
-                    name = part6 + ": " + parts[parts.length-3];
+                    name = part6 + ": " + parts[parts.length-3] + " HTML PLOT";
                 } else if (path.includes("_L3_") && path.includes(".nc")) {
-                    name = part7 + ": " + parts[parts.length-3];
+                    if (reg.test(path)) {
+                        name = part5 + ": " + parts[parts.length-3] + " DATA FILE";
+                    } else {
+                        name = part7 + ": " + parts[parts.length-3] + " DATA FILE";
+                    }
                 } else if (path.includes(".pdf")) {
                     name = part8 + " QAQC report";
                 } else {
