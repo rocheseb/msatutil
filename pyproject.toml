@@ -64,6 +64,7 @@ find = {namespaces = false}
 [project.entry-points."console_scripts"]
 mairhtml = "msatutil.mair_geoviews:main"
 mairls = "msatutil.mair_ls:main"
+msatclear = "msatutil.msat_clear_area:main"
 msattargets = "msatutil.msat_targets:main"
 msatimages = "msatutil.msat_images:main"
 mairtargets = "msatutil.mair_targets:main"

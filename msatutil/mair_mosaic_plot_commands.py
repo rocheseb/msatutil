@@ -1,6 +1,7 @@
-import os
 import argparse
+import os
 from pathlib import Path
+
 from msatutil.mair_targets import get_target_dict
 from msatutil.msat_targets import gs_posixpath_to_str
 
