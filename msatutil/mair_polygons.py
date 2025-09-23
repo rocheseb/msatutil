@@ -15,8 +15,23 @@ from msatutil.mair_targets import PONumber, get_target_dict
 
 
 def simplify_to_exterior_safe(
-    geometry, max_points: int = 500, initial_tolerance: float = 1e-5, scale_factor: float = 1.5
+    geometry: Union[Polygon, MultiPolygon],
+    max_points: int = 500,
+    initial_tolerance: float = 1e-5,
+    scale_factor: float = 1.5,
 ) -> Polygon:
+    """
+    Converts an input Polygon or MultiPolygon into a Polygon that has less than max_points vertices
+    For a MultiPolygon, only keep the exterior of the largest geometry
+
+    Inputs:
+        geometry (Union[Polygon, MultiPolygon]): a shapely polygon
+        max_points (int): the output polygon will have less than this many points
+        initial_tolerance (float): starting tolerance to draw the exterior polygon
+        scale_factor (float): tolerance*scale_factor at each iteration until polygon has < max_points
+    Outputs:
+        simplified (Polygon): polygon with less than max_points
+    """
     merged = unary_union(geometry)
 
     # Check type
@@ -47,6 +62,11 @@ def merge_to_single_exterior(geometry) -> Polygon:
     """
     Merge any Polygon or MultiPolygon into a single polygon
     using only the outer boundary, discarding holes.
+
+    Inputs:
+        geometry: a shapely geometry
+    Outputs:
+        merged (Polygon): a single shapely polygon
     """
     merged = unary_union(geometry)
 
@@ -65,7 +85,13 @@ def merge_to_single_exterior(geometry) -> Polygon:
 
 def derive_mair_polygon(l3_mosaic_file: str, simplify_npoints: Optional[int] = None) -> Polygon:
     """
-    Derive an exterior polygon from a MAIR L3 mosaic file
+    Derive an exterior polygon from a MethaneAIR L3 mosaic file
+
+    Inputs:
+        l3_mosaic_file (str): full path to a L3 mosaic file
+        simplify_npoints (Optional[int]): generate polygons with less than this many many
+    Outputs:
+        merged (Polygon): polygon that represents the given L3 file
     """
 
     with Dataset(l3_mosaic_file) as l3:
@@ -106,6 +132,18 @@ def mair_polygons(
     min_rotated_rectangle: bool = False,
     update_existing: bool = False,
 ):
+    """
+    Generate a GeoJSON file with polygons for the mapping areas of the MethaneAIR flights
+    listed in the l3_mosaic_list file
+
+    Inputs:
+        l3_mosaic_list (str): file listing paths to MethaneAIR L3 mosaic files
+        output_file (str): output geojson file
+        simplify_npoints (Optional[int]): generate polygons with less than this many many
+        use_mount (bool): if True, convert gs:// paths to local paths
+        min_rotated_rectangle (bool): if True, save the minimum rotated rectangles that matches the flight polygons
+        updated_existing (bool): if True, update an existing geojson file and only compute polygons for new flights and PIDs
+    """
     update_existing = update_existing and Path(output_file).exists()
 
     if update_existing:
