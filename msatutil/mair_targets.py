@@ -11,17 +11,35 @@ import holoviews as hv
 import pandas as pd
 import reverse_geocode
 from bokeh.embed import file_html
-from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
-                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
-                          HoverTool, InlineStyleSheet, Row, Select, TabPanel,
-                          Tabs, TapTool, TextInput)
+from bokeh.models import (
+    BoxSelectTool,
+    Button,
+    Column,
+    ColumnDataSource,
+    CustomJS,
+    DateRangeSlider,
+    Div,
+    GlyphRenderer,
+    HoverTool,
+    InlineStyleSheet,
+    Row,
+    Select,
+    TabPanel,
+    Tabs,
+    TapTool,
+    TextInput,
+)
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
 
-from msatutil.msat_targets import (GOOGLE_IMAGERY, extract_timestamp,
-                                   gs_posixpath_to_str, none_or_str,
-                                   plot_polygons)
+from msatutil.msat_targets import (
+    GOOGLE_IMAGERY,
+    extract_timestamp,
+    gs_posixpath_to_str,
+    none_or_str,
+    plot_polygons,
+)
 
 warnings.simplefilter("ignore")
 
@@ -66,8 +84,24 @@ class PONumber:
 
 
 def derive_L3_html_path(
-    l3_mosaic_file_path: PosixPath, html_bucket: str, campaign: str, flight: str, area: str
+    l3_mosaic_file_path: PosixPath,
+    html_bucket: str,
+    campaign: str,
+    flight: str,
+    area: str,
 ) -> str:
+    """
+    Given a L3 mosaic netcdf bucket path, derive the link to the corresponding plot under html_bucket
+
+    Inputs:
+        l3_mosaic_file_path (PosixPath): L3 mosaic netcdf bucket path
+        html_bucket (str): bucket where the plots are stored
+        campaign (str): campaign name
+        flight (str): flight name
+        area (str): area name
+    Outputs:
+        (str): link to the L3 mosaic html plot
+    """
 
     fname = l3_mosaic_file_path.name.replace(".nc", ".html")
 
@@ -77,6 +111,17 @@ def derive_L3_html_path(
 
 
 def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwargs) -> dict:
+    """
+    Given a file listing bucket paths of MethaneAIR L2 qaqc files or L3 mosaic files,
+    generate a dictionary that only keeps paths for the latest processing IDs
+
+    Inputs:
+        file_list (str): full path to the file that lists bucket paths
+        func (Callable): the function to apply to the bucket paths
+        **kwargs: kwargs passed to func
+    Outputs:
+        d (dict): dictionary that only keeps paths for the latest processing IDs
+    """
     with open(file_list, "r") as fin:
         file_list = [Path(i.strip()) for i in fin.readlines()]
 
@@ -165,6 +210,9 @@ def get_info(lat: float, lon: float, key: str):
 
 
 def first_non_dict_value(d: dict):
+    """
+    Return the first non-dictionary value in the nested dictionary d
+    """
     if not isinstance(d, dict):  # already a value
         return d
     for v in d.values():
@@ -184,7 +232,8 @@ def make_mair_targets_map(
     write: bool = True,
 ):
     """
-    Read the list of targets from the infile geojson file and make a html map
+    Read the list of targets from the input  polygon_file and make a html map to browse
+    data from MethaneAIR flights
 
     Inputs:
         polygon_file (str): input geojson file with all the target polygons
@@ -194,6 +243,8 @@ def make_mair_targets_map(
         html_bucket (Optional[str]): bucket on which the mosaic html maps are saved
         imagery_source (str): one of GOOGLE or ESRI
         write (bool): if True, write the html map file
+    Outputs:
+        layout: the bokeh layout object
     """
     gdf = gpd.read_file(polygon_file)
 
@@ -258,7 +309,7 @@ def make_mair_targets_map(
                     [html_td[c][f][p][a] for a in td[c][f][p]]
                 )
     scatter_df = gdf[scatter_columns]
-    scatter_df = scatter_df[~(scatter_df["single_file"]=="")]
+    scatter_df = scatter_df[~(scatter_df["single_file"] == "")]
     scatter_df["timestamps"] = scatter_df["single_file"].apply(
         lambda x: extract_timestamp(x, True) if is_L2 else extract_timestamp(Path(x).name)
     )
@@ -803,7 +854,9 @@ def make_mair_targets_map(
         width=300,
     )
 
-    notes = Div(text="Note 'flight' here counts the number of priority maps.<br>e.g. MX064 has two priority maps so counts for 2 flights.")
+    notes = Div(
+        text="Note 'flight' here counts the number of priority maps.<br>e.g. MX064 has two priority maps so counts for 2 flights."
+    )
 
     if do_html:
         layout = Row(
@@ -834,7 +887,7 @@ def make_mair_targets_map(
                 alpha_button,
                 creation_time_div,
             ),
-        )        
+        )
     else:
         layout = Row(
             bokeh_plot,
@@ -847,7 +900,7 @@ def make_mair_targets_map(
                 alpha_button,
                 creation_time_div,
             ),
-        )       
+        )
     layout.sizing_mode = "scale_both"
 
     if write:
@@ -866,7 +919,8 @@ def make_mair_targets_map_tabs(
     html_bucket: Optional[list[Optional[str]]] = None,
 ):
     """
-    Read the list of targets from the polygon_file geojson file
+    Read the list of targets from the polygon_file geojson file and make a map to
+    browse MethaneAIR data that has multiple tabs for different product levels
 
     Inputs:
         polygon_file (str): input geojson file with all the target polygons
