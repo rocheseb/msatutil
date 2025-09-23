@@ -1,15 +1,17 @@
 import argparse
+from pathlib import Path
 from typing import Callable, Optional, Union
 
+import geopandas as gpd
 import numpy as np
+import pandas as pd
 from affine import Affine
 from netCDF4 import Dataset
 from rasterio import features
 from shapely.geometry import MultiPolygon, Polygon, shape
 from shapely.ops import unary_union
-import geopandas as gpd
 
-from msatutil.mair_targets import get_target_dict
+from msatutil.mair_targets import PONumber, get_target_dict
 
 
 def simplify_to_exterior_safe(
@@ -102,7 +104,13 @@ def mair_polygons(
     simplify_npoints: Optional[int] = None,
     use_mount: bool = False,
     min_rotated_rectangle: bool = False,
+    update_existing: bool = False,
 ):
+    update_existing = update_existing and Path(output_file).exists()
+
+    if update_existing:
+        gdf = gpd.read_file(output_file)
+        n_replaced = 0
 
     td = get_target_dict(l3_mosaic_list)
 
@@ -120,9 +128,18 @@ def mair_polygons(
         for f in td[c]:
             print("\t", f)
             for p in td[c][f]:
+                if update_existing and p in gdf["pid"].values:
+                    print(f"Skipping {c} {f} {p}")
+                    continue
+                if update_existing and f in gdf["flight"].values:
+                    old_p = gdf.loc[gdf["flight"] == f, "pid"].values[0]
+                    if PONumber(p) > PONumber(old_p):
+                        gdf = gdf[gdf["pid"] != old_p]
+                    print(f"Replacing {c} {f} {old_p} with {p}")
+                    n_replaced += 1
                 areas = td[c][f][p].keys()
-                has_map = any(["priority-map" in i for i in areas])
-                has_target = any(["priority-target" in i for i in areas])
+                has_map = any("priority-map" in i for i in areas)
+                has_target = any("priority-target" in i for i in areas)
                 area_key = "priority-map" if has_map else "priority-target"
                 if not (has_map or has_target):
                     area_key = list(td[c][f][p].keys())[0]
@@ -139,10 +156,19 @@ def mair_polygons(
                         gd["geometry"] += [
                             derive_mair_polygon(td[c][f][p][a], simplify_npoints=simplify_npoints)
                         ]
-    gdf = gpd.GeoDataFrame(gd, crs="EPSG:4326")
-
-    if min_rotated_rectangle:
-        gdf["geometry"] = gdf["geometry"].apply(lambda x: x.minimum_rotated_rectangle)
+    if not update_existing:
+        gdf = gpd.GeoDataFrame(gd, crs="EPSG:4326")
+        if min_rotated_rectangle:
+            gdf["geometry"] = gdf["geometry"].apply(lambda x: x.minimum_rotated_rectangle)
+    else:
+        n_new = len(gd["campaign"])
+        print(f"Replaced {n_replaced} existing flights with higher PIDs")
+        print(f"Added {n_new-n_replaced} new flights")
+        if n_new > 0:
+            gdf2 = gpd.GeoDataFrame(gd, crs="EPSG:4326")
+            if min_rotated_rectangle:
+                gdf2["geometry"] = gdf2["geometry"].apply(lambda x: x.minimum_rotated_rectangle)
+            gdf = gpd.GeoDataFrame(pd.concat([gdf, gdf2], ignore_index=True), crs=gdf.crs)
 
     gdf.to_file(output_file, driver="GeoJSON")
 
@@ -176,6 +202,11 @@ def main():
         action="store_true",
         help="if given, make tight-fitting rectangles for the polygons",
     )
+    parser.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="if given, update existing file by only regenerating new PIDs",
+    )
     args = parser.parse_args()
 
     mair_polygons(
@@ -184,6 +215,7 @@ def main():
         args.simplify_npoints,
         args.use_mount,
         args.min_rotated_rectangle,
+        args.update_existing,
     )
 
 
