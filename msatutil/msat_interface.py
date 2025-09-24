@@ -680,8 +680,12 @@ class msat_collection:
                 use_valid_xtrack=use_valid_xtrack,
             ).compute()
 
-            lat = self.pmesh_prep("Latitude", ids=ids_slice, chunks=chunks).compute()
-            lon = self.pmesh_prep("Longitude", ids=ids_slice, chunks=chunks).compute()
+            lat = self.pmesh_prep(
+                "Latitude", ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+            ).compute()
+            lon = self.pmesh_prep(
+                "Longitude", ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+            ).compute()
 
             nonan = ~np.isnan(x)
             flat_x = x[nonan]
@@ -1284,9 +1288,11 @@ class msat_collection:
         elif vmin is None and vmax is None:
             extend = "neither"
 
-        has_cbar = any([hasattr(c,"colorbar") and c.colorbar is not None for c in ax.collections])
+        has_cbar = any([hasattr(c, "colorbar") and c.colorbar is not None for c in ax.collections])
         if not has_cbar:
-            plt.colorbar(m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction, pad=0.02)
+            plt.colorbar(
+                m, label=colorbar_label, ax=ax, extend=extend, fraction=cb_fraction, pad=0.02
+            )
 
         ax.set_title(title)
         ax.set_xlabel(xlabel)
