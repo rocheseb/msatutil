@@ -436,7 +436,7 @@ def make_mair_targets_map(
     # callback to copy the corresponding files when clicking on a polygon
     taptool.callback = CustomJS(
         args=taptool_callback_args,
-        code=r"""
+        code="""
         const selected_indices = poly_source.selected.indices;
         let key;
         if (typeof file_type_select !== 'undefined'){
@@ -557,7 +557,7 @@ def make_mair_targets_map(
     # callback to copy the corresponding file path when clicking on the scatter points
     scatter_taptool.callback = CustomJS(
         args=scatter_taptool_callback_args,
-        code=r"""
+        code="""
         const selected = scatter_source.selected.indices;
         let key;
         if (typeof file_type_select !== 'undefined'){
