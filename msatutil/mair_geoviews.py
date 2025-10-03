@@ -8,10 +8,12 @@ import subprocess
 from typing import List, Optional, Tuple, Union
 
 import bokeh
+import datashader as ds
 import geoviews as gv
 import holoviews as hv
 import numpy as np
 import panel as pn
+import xarray as xr
 from bokeh.embed import file_html
 from bokeh.models import (
     ColorBar,
@@ -125,16 +127,21 @@ def regrid(
     Outputs:
         tuple[np.ndarray, np.ndarray, np.ndarray]: output lon, lat, and regridded field
     """
-    quad = gv.project(gv.QuadMesh((x, y, z)))
     width_pixels, height_pixels = get_pixel_dims(
         [np.nanmin(x), np.nanmin(y), np.nanmax(x), np.nanmax(y)],
         pixel_resolution[0],
         pixel_resolution[1],
     )
-    raster = rasterize(quad, width=width_pixels, height=height_pixels, precompute=True)
-    data = raster[()].data
+    da = xr.DataArray(
+        z,
+        name="Z",
+        dims=["y", "x"],
+        coords={"Longitude": (["y", "x"], x), "Latitude": (["y", "x"], y)},
+    )
+    canvas = ds.Canvas(plot_width=width_pixels, plot_height=height_pixels)
+    quadmesh = canvas.quadmesh(da, x="Longitude", y="Latitude")
 
-    return data["Longitude"].values, data["Latitude"].values, data["z"].values
+    return quadmesh.Longitude.values, quadmesh.Latitude.values, quadmesh.values
 
 
 def set_clim(z: np.ndarray, n_std: int = 3) -> tuple[float, float]:
