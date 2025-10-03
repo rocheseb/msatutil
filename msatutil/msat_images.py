@@ -37,10 +37,10 @@ def qaqc_filter(qaqc_file) -> bool:
     if missing_frames_fraction > 0.05:
         return ">5% Missing frames"
 
-    # Don't include scenes with less than 300 frames
+    # Don't include scenes with less than 290 frames
     number_of_frames = float(data.loc[data["var"] == "Number of frames"].iloc[0].value)
-    if number_of_frames < 300:
-        return "<300 frames"
+    if number_of_frames < 290:
+        return "<290 frames"
 
     # Don't include scenes more than 70% flagged
     flag_fraction = float(data.loc[data["var"] == "CH4 flagged fraction"].iloc[0].value)
@@ -87,7 +87,8 @@ def select_colorscale(mc: msat_collection) -> tuple[float, float]:
         flag = np.zeros(xch4.shape)
 
     med = np.nanmedian(xch4[flag == 0].filled(np.nan))
-    std = np.nanstd(xch4[flag == 0].filled(np.nan), ddof=1)
+    q25, q75 = np.nanpercentile(xch4[flag == 0].filled(np.nan), [25, 75])
+    std = 0.74 * (q75 - q25)
 
     STD_THRESHOLD = 65  # ppb
     if std > STD_THRESHOLD:
@@ -295,7 +296,7 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         title="Mean CH4 flux (kg/hr)",
     )
 
-    with msat_collection([l3_file],use_dask=False) as l3:
+    with msat_collection([l3_file], use_dask=False) as l3:
         vmin, vmax = select_colorscale(l3)
         lon = l3.pmesh_prep("lon")
         lat = l3.pmesh_prep("lat")
@@ -337,7 +338,7 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         layout_details=l4_file,
         browser_tab_title="MethaneSAT L4",
     )
-    del lat,lon,xch4,albedo,flux,l4_plot,l3_plot_xch4,l3_plot_albedo,plot
+    del lat, lon, xch4, albedo, flux, l4_plot, l3_plot_xch4, l3_plot_albedo, plot
     gc.collect()
 
 
@@ -506,7 +507,7 @@ def main():
                         title=os.path.splitext(output_file.name)[0],
                     )
                 except Exception as e:
-                    print(f"Could not make the plot for {gs_file}",e)
+                    print(f"Could not make the plot for {gs_file}", e)
                     log.loc[len(log)] = [t, c, p, "Cloud not make the plot"]
                     continue
                 finally:
