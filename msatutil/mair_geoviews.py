@@ -13,8 +13,18 @@ import holoviews as hv
 import numpy as np
 import panel as pn
 from bokeh.embed import file_html
-from bokeh.models import (ColorBar, Column, CrosshairTool, CustomJS, Div,
-                          NumericInput, Row, Select, Slider, Span)
+from bokeh.models import (
+    ColorBar,
+    Column,
+    CrosshairTool,
+    CustomJS,
+    Div,
+    NumericInput,
+    Row,
+    Select,
+    Slider,
+    Span,
+)
 from bokeh.resources import CDN
 from geoviews.element import WMTS
 from geoviews.tile_sources import EsriImagery
@@ -99,6 +109,53 @@ def get_pixel_dims(
     return width_pixels, height_pixels
 
 
+def regrid(
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    pixel_resolution: tuple[float, float],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Regrid the input data to roughly the given resolution (in meters)
+
+    Inputs:
+        x: 1D or 2D array of longitudes (shape (N,) or (M,N))
+        y: 1D or 2D array of latitudes (shape (M,) or (M,N))
+        z: 2D array of the data to plot (shape (M,N))
+    Outputs:
+        tuple[np.ndarray, np.ndarray, np.ndarray]: output lon, lat, and regridded field
+    """
+    quad = gv.project(gv.QuadMesh((x, y, z)))
+    width_pixels, height_pixels = get_pixel_dims(
+        [np.nanmin(x), np.nanmin(y), np.nanmax(x), np.nanmax(y)],
+        pixel_resolution[0],
+        pixel_resolution[1],
+    )
+    raster = rasterize(quad, width=width_pixels, height=height_pixels, precompute=True)
+    data = raster[()].data
+
+    return data["Longitude"].values, data["Latitude"].values, data["z"].values
+
+
+def set_clim(z: np.ndarray, n_std: int = 3) -> tuple[float, float]:
+    """
+    Define color limits as median +/- n_std standard deviations.
+    Estimate std from IQR to eliminate outliers.
+
+    Inputs:
+        z (np.ndarray): input data
+    Outputs:
+        clim (tuple[float,float]): output limits
+    """
+    z = np.ma.MaskedArray(z).filled(np.nan)
+    med_z = np.nanmedian(z)
+    q25, q75 = np.nanpercentile(z, [25, 75])
+    std_z = 0.74 * (q75 - q25)
+    clim = (med_z - n_std * std_z, med_z + n_std * std_z)
+
+    return clim
+
+
 def show_map(
     x,
     y,
@@ -151,13 +208,7 @@ def show_map(
     quad = gv.project(gv.QuadMesh((x, y, z)))
 
     if clim is None:
-        z = np.ma.MaskedArray(z).filled(np.nan)
-        # define color limits as median +/- 3 std
-        # estimate std from IQR to eliminate outliers
-        med_z = np.nanmedian(z)
-        q25, q75 = np.nanpercentile(z,[25,75])
-        std_z = 0.74 * (q75 - q25)
-        clim = (med_z - 3 * std_z, med_z + 3 * std_z)
+        clim = set_clim(z)
 
     if pixel_resolution is not None:
         width_pixels, height_pixels = get_pixel_dims(
