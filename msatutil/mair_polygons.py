@@ -111,7 +111,10 @@ def derive_mair_polygon(l3_mosaic_file: str, simplify_npoints: Optional[int] = N
     # shapes() yields geometry + value
     geoms = []
     for geom, v in features.shapes(mask.astype(np.uint8), mask=mask, transform=transform):
-        geoms.append(shape(geom))
+        geom = shape(geom)
+        if geom.area < 1e-3:
+            continue
+        geoms.append(geom)
 
     # merge polygons into one (holes preserved)
     polygon = unary_union(geoms)
