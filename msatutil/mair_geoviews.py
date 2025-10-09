@@ -124,6 +124,7 @@ def regrid(
         x: 1D or 2D array of longitudes (shape (N,) or (M,N))
         y: 1D or 2D array of latitudes (shape (M,) or (M,N))
         z: 2D array of the data to plot (shape (M,N))
+        pixel_resolution (tuple[float,float]): desired pixel (width,height) in meters
     Outputs:
         tuple[np.ndarray, np.ndarray, np.ndarray]: output lon, lat, and regridded field
     """
@@ -433,6 +434,7 @@ def save_static_plot_with_widgets(
     # Color palette select
     uniform_sequential_palettes = list_cmaps(category="Uniform Sequential")
     sequential_palettes = list_cmaps(category="Sequential")
+    diverging_palettes = list_cmaps(category="Diverging")
     palette_dict = {k.lower() + " (u)": process_cmap(k) for k in uniform_sequential_palettes}
     for k in set(sequential_palettes).difference(uniform_sequential_palettes):
         palette_dict[k.lower()] = process_cmap(k)
@@ -440,6 +442,7 @@ def save_static_plot_with_widgets(
         palette_dict[k.lower()] = process_cmap(k)
         k_r = f"{k}_r"
         palette_dict[k_r.lower()] = process_cmap(k_r)
+    palette_dict.update({k.lower() + " (d)": process_cmap(k) for k in diverging_palettes})
 
     palette_select = Select(
         options=sorted(list(palette_dict.keys())),
