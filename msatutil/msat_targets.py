@@ -1393,6 +1393,8 @@ def main():
     )
     args = parser.parse_args()
 
+    print(datetime.strftime(datetime.utcnow(), "%Y-%m-%d UPDATE MSAT MAP"))
+
     if len(args.file_list) == 1:
         _ = make_msat_targets_map(
             args.infile,
