@@ -36,6 +36,25 @@ from msatutil.msat_nc import MSATError, msat_nc
 GOOGLE_TILE_SOURCE = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
 
 
+def set_clim(z: np.ndarray, n_std: int = 3) -> tuple[float, float]:
+    """
+    Define color limits as median +/- n_std standard deviations.
+    Estimate std from IQR to eliminate outliers.
+
+    Inputs:
+        z (np.ndarray): input data
+    Outputs:
+        clim (tuple[float,float]): output limits
+    """
+    z = np.ma.MaskedArray(z).filled(np.nan)
+    med_z = np.nanmedian(z)
+    q25, q75 = np.nanpercentile(z, [25, 75])
+    std_z = 0.74 * (q75 - q25)
+    clim = (med_z - n_std * std_z, med_z + n_std * std_z)
+
+    return clim
+
+
 @dask.delayed
 def get_msat_file(file_path: str):
     """
@@ -865,6 +884,7 @@ class msat_collection:
         colorbar_label: Optional[str] = None,
         cb_fraction: float = 0.04,
         mask: Optional[np.ndarray] = None,
+        use_set_clim: bool = False,
         **kwargs,  # matplotlib pcolormesh arguments
     ) -> np.ndarray[float]:
         """
@@ -898,6 +918,7 @@ class msat_collection:
         colorbar_label (Optional[str]): if givem set as the colorbar label
         cb_fraction (float): controls the size of the colorbar
         mask (Optional[np.ndarray]): Boolean arrays where True will be set to nan before plotting
+        use_set_clim (bool): if True, use the set_clim function to set the color range, overrides vmin and vmax
         kwargs: passed to make_heatmap, _make_heatmap_with_background_tile, and the pcolormesh call
 
         Outputs:
@@ -1058,6 +1079,7 @@ class msat_collection:
             xlabel=xlabel,
             ylabel=ylabel,
             cb_fraction=cb_fraction,
+            use_set_clim=use_set_clim,
             **kwargs,
         )
 
@@ -1221,7 +1243,6 @@ class msat_collection:
         x: np.ndarray[float],
         lon: Optional[np.ndarray[float]] = None,
         lat: Optional[np.ndarray[float]] = None,
-        latlon: bool = False,
         vertices: Optional[np.ndarray[float]] = None,
         over: Optional[str] = "red",
         under: Optional[str] = "hotpink",
@@ -1231,11 +1252,37 @@ class msat_collection:
         title: str = "",
         cb_fraction: float = 0.04,
         basic: bool = False,
+        use_set_clim: bool = False,
         **kwargs,
     ):
+        """
+        Make a heatmap plot in ax
+
+        Inputs:
+            ax (plt.Axes): matplotlib axes
+            x (np.ndarray[float]): 2D data array
+            lon (Optional[np.ndarray[float]]): longitude array
+            lat (Optional[np.ndarray[float]]): latitude array
+            vertices (Optional[np.ndarray[float]]): if given, use matplotlib.collections.PolyCollection
+            over (Optional[str]): color to use above the max of the color scale (only used if vminmax is not None)
+            under (Optional[str]): color to use under the min of the color scale (only used if vminmax is not None)
+            colorbar_label (str): label for the colorbar
+            xlabel (str): horizontal axis label
+            ylabel (str): vertical axis label
+            title (str): plot title
+            cb_fraction (float): controls the size of the colorbar as a fraction of the plot
+            basic (bool): if True, don't add a background imagery tile to latlon plots
+            use_set_clim (bool): if True, use the set_clim function to set the color range, overrides vmin and vmax
+            **kwargs: matplotlib pcolormesh arguments
+        """
         vmin = kwargs.get("vmin")
         vmax = kwargs.get("vmax")
         cmap = kwargs.get("cmap", "viridis")
+
+        if use_set_clim:
+            vmin, vmax = set_clim(x)
+            kwargs["vmin"] = vmin
+            kwargs["vmax"] = vmax
 
         if vertices is not None:
             # Make the plot with matplotlib.collections.PolyCollection

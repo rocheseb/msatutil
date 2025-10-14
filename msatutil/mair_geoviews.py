@@ -38,7 +38,7 @@ from pyproj import Transformer
 from msatutil.mair_ls import create_parser as create_ls_parser
 from msatutil.mair_ls import mair_ls
 from msatutil.msat_dset import gs_list, msat_dset
-from msatutil.msat_interface import get_msat
+from msatutil.msat_interface import get_msat, set_clim
 
 hv.extension("bokeh")
 
@@ -143,25 +143,6 @@ def regrid(
     quadmesh = canvas.quadmesh(da, x="Longitude", y="Latitude")
 
     return quadmesh.Longitude.values, quadmesh.Latitude.values, quadmesh.values
-
-
-def set_clim(z: np.ndarray, n_std: int = 3) -> tuple[float, float]:
-    """
-    Define color limits as median +/- n_std standard deviations.
-    Estimate std from IQR to eliminate outliers.
-
-    Inputs:
-        z (np.ndarray): input data
-    Outputs:
-        clim (tuple[float,float]): output limits
-    """
-    z = np.ma.MaskedArray(z).filled(np.nan)
-    med_z = np.nanmedian(z)
-    q25, q75 = np.nanpercentile(z, [25, 75])
-    std_z = 0.74 * (q75 - q25)
-    clim = (med_z - n_std * std_z, med_z + n_std * std_z)
-
-    return clim
 
 
 def show_map(
