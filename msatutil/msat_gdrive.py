@@ -144,7 +144,7 @@ def trash_file(service_account_file: str, folder_id: str, filename: str) -> bool
     return True
 
 
-def cleanup(service_account_file: str, folder_id: str, local_folder: str, contains: str):
+def cleanup(service_account_file: str, folder_id: str, local_folder: str, contains: str, extension: str):
     """
     Trash drive files under folder_id if they are not under local_folder
 
@@ -162,7 +162,7 @@ def cleanup(service_account_file: str, folder_id: str, local_folder: str, contai
     drive_service = build("drive", "v3", credentials=credentials)
 
     # Search for the file in the given folder
-    query = f"'{folder_id}' in parents and name contains '{contains}' and trashed = false"
+    query = f"'{folder_id}' in parents and name contains '{contains}' and name contains '.{extension}' and trashed = false"
 
     files = []
     page_token = None
@@ -188,8 +188,11 @@ def cleanup(service_account_file: str, folder_id: str, local_folder: str, contai
             break
 
     drive_files = [i["name"] for i in files if not i["trashed"]]
-    local_files = [i.name for i in Path(local_folder).glob("*.png")]
+    local_files = [i.name for i in Path(local_folder).glob(f"*.{extension}")]
     dif = set(drive_files).difference(local_files)
+    if not dif:
+        print("No files to cleanup")
+        return
     for i in tqdm(dif):
         trash_file(service_account_file, folder_id, i)
 
