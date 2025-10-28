@@ -194,6 +194,48 @@ def get_msat(
     return result
 
 
+def pcolormesh_or_contourf(x: np.ndarray, y: np.ndarray, z: np.ndarray, ax: plt.Axes, **kwargs):
+    """
+    Make a 2D plot with x,y,z using pcolormesh. Switch to contourf if there is an error raised.
+
+    Inputs:
+        x (np.ndarray): horizontal coordinates
+        x (np.ndarray): vertical coordinates
+        z (np.ndarray): values
+        ax (plt.Axes): matplotlib axis
+        **kwargs: passed to pcolormesh and contourf
+    Outputs:
+        matplotlib.collections.QuadMesh or matplotlib.contour.QuadContourSet
+
+    """
+    vmin = kwargs.get("vmin")
+    vmax = kwargs.get("vmax")
+
+    try:
+        # Use pcolormesh by default
+        m = ax.pcolormesh(
+            x,
+            y,
+            z,
+            **kwargs,
+        )
+    except ValueError:
+        # pcolormesh can't handle nans in lon and lat
+        # fall back to contourf when that is the case
+        levels = np.linspace(vmin, vmax, 100) if vmin and vmax else 100
+        m = ax.contourf(
+            x,
+            y,
+            z,
+            levels,
+            extend="both",
+            **kwargs,
+        )
+        ax.figure.suptitle("Using contourf", color="red")
+
+    return m
+
+
 class msat_collection:
     """
     Class to interface with a list of MethaneSAT/AIR L1B or L2 files.
@@ -1163,27 +1205,7 @@ class msat_collection:
         xmin, ymin = transformer.transform(lon_min, lat_min)
         xmax, ymax = transformer.transform(lon_max, lat_max)
 
-        try:
-            # Use pcolormesh by default
-            m = ax.pcolormesh(
-                x,
-                y,
-                z,
-                **kwargs,
-            )
-        except ValueError:
-            # pcolormesh can't handle nans in lon and lat
-            # fall back to contourf when that is the case
-            levels = np.linspace(vmin, vmax, 100) if vmin and vmax else 100
-            m = ax.contourf(
-                x,
-                y,
-                z,
-                levels,
-                extend="both",
-                **kwargs,
-            )
-            ax.figure.suptitle("Using contourf", color="red")
+        m = pcolormesh_or_contourf(x, y, z, ax, **kwargs)
 
         # Format longitude/latitude labels
         def format_latlon(value, is_lon):
@@ -1305,7 +1327,7 @@ class msat_collection:
             ax.set_ylim(all_points[:, 1].min(), all_points[:, 1].max())
         elif lat is not None and lon is not None:
             if basic:
-                m = ax.pcolormesh(lon, lat, x, vmin=vmin, vmax=vmax, cmap=cmap)
+                m = pcolormesh_or_contourf(lon, lat, x, ax, **kwargs)
             else:
                 m = msat_collection._make_heatmap_with_background_tile(
                     ax,
