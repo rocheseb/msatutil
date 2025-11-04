@@ -238,7 +238,10 @@ def read_l4(l4_file: str):
         flux = l4["mean_flux"][:]
         transformer = Transformer.from_crs(l4.utm_crs_code, "epsg:4326", always_xy=True)
         l3_root = str(Path(*Path(l4_file).parts[:4])).replace("4", "3")
-        l3_file = l4["ProcessingMetadata"].level3_product.replace("[prod]", l3_root)
+        if "ProcessingMetadata" in l4.groups:
+            l3_file = l4["ProcessingMetadata"].level3_product.replace("[prod]", l3_root)
+        else:
+            l3_file = None
 
     xx, yy = np.meshgrid(x, y, indexing="ij")
 
@@ -296,36 +299,39 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         title="Mean CH4 flux (kg/hr)",
     )
 
-    with msat_collection([l3_file], use_dask=False) as l3:
-        vmin, vmax = select_colorscale(l3)
-        lon = l3.pmesh_prep("lon")
-        lat = l3.pmesh_prep("lat")
-        xch4 = l3.pmesh_prep("xch4")
-        albedo = l3.pmesh_prep("albedo")
-    l3_plot_xch4 = show_map(
-        lon,
-        lat,
-        xch4,
-        width=width,
-        height=height,
-        cmap="viridis",
-        clim=(vmin, vmax),
-        title="XCH4 (ppb)",
-        single_panel=True,
-    )
-    l3_plot_albedo = show_map(
-        lon,
-        lat,
-        albedo,
-        width=width,
-        height=height,
-        cmap="gray",
-        clim=(np.nanmin(albedo), np.nanmax(albedo)),
-        title="Albedo",
-        single_panel=True,
-    )
+    if l3_file is not None:
+        with msat_collection([l3_file], use_dask=False) as l3:
+            vmin, vmax = select_colorscale(l3)
+            lon = l3.pmesh_prep("lon")
+            lat = l3.pmesh_prep("lat")
+            xch4 = l3.pmesh_prep("xch4")
+            albedo = l3.pmesh_prep("albedo")
+        l3_plot_xch4 = show_map(
+            lon,
+            lat,
+            xch4,
+            width=width,
+            height=height,
+            cmap="viridis",
+            clim=(vmin, vmax),
+            title="XCH4 (ppb)",
+            single_panel=True,
+        )
+        l3_plot_albedo = show_map(
+            lon,
+            lat,
+            albedo,
+            width=width,
+            height=height,
+            cmap="gray",
+            clim=(np.nanmin(albedo), np.nanmax(albedo)),
+            title="Albedo",
+            single_panel=True,
+        )
 
-    plot = hv.Layout([l4_plot, l3_plot_xch4, l3_plot_albedo]).cols(2)
+        plot = hv.Layout([l4_plot, l3_plot_xch4, l3_plot_albedo]).cols(2)
+    else:
+        plot = l4_plot
 
     if l4_file.startswith("/mnt/gcs/"):
         l4_file = l4_file.replace("/mnt/gcs/", "gs://")
@@ -338,7 +344,11 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
         layout_details=l4_file,
         browser_tab_title="MethaneSAT L4",
     )
-    del lat, lon, xch4, albedo, flux, l4_plot, l3_plot_xch4, l3_plot_albedo, plot
+
+    del lat, lon, xch4, albedo, flux, l4_plot, plot
+    if l3_file is not None:
+        del l3_plot_xch4, l3_plot_albedo
+    
     gc.collect()
 
 
