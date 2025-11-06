@@ -32,6 +32,7 @@ from bokeh.models import (
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
+from pystac_client import Client
 
 from msatutil.msat_gdrive import get_file_link
 
@@ -63,12 +64,13 @@ def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     return None
 
 
-def derive_L2_html_path(l2pp_file_path: str) -> str:
+def derive_L2_html_path(l2pp_file_path: str, target_id: int) -> str:
     """
     Return the qaqc html path corresponding to a L2 post-processed file
 
     Input:
         l2pp_file_path (str): path to the L2 post-processed file
+        target_id (int): target ID number
     Ouputs:
         html_file_path (str): path to the L2 qaqc file
     """
@@ -79,10 +81,10 @@ def derive_L2_html_path(l2pp_file_path: str) -> str:
         / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
     )
 
-    return gs_posixpath_to_str(html_file_path).replace("gs://", "https://storage.cloud.google.com/")
+    return gs_posixpath_to_auth_url(html_file_path)
 
 
-def derive_L4_html_path(data_bucket_path: str, html_bucket: str) -> str:
+def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int) -> str:
     """
     Return the html path corresponding to a L4 .nc data file
     This will assume each data file has an existing corresponding html file.
@@ -90,22 +92,20 @@ def derive_L4_html_path(data_bucket_path: str, html_bucket: str) -> str:
     Input:
         data_bucket_path (str): path to the data file
         html_bucket (str): bucket path where the .html files are stored (start with gs://)
+        target_id (int): target ID number
     Ouputs:
         html_file_path (str): path to the .html file
     """
     data_bucket_path = Path(data_bucket_path)
 
     image_file_path = (
-        Path(html_bucket)
-        / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.html')}"
+        Path(html_bucket) / f"{target_id}_{data_bucket_path.name.replace('.nc','.html')}"
     )
 
-    return gs_posixpath_to_str(image_file_path).replace(
-        "gs://", "https://storage.cloud.google.com/"
-    )
+    return gs_posixpath_to_auth_url(image_file_path)
 
 
-def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
+def derive_image_path(data_bucket_path: str, image_bucket: str, target_id: int) -> str:
     """
     Return the image path corresponding to a .nc data file
     This will assume each data file has an existing corresponding image file.
@@ -113,25 +113,24 @@ def derive_image_path(data_bucket_path: str, image_bucket: str) -> str:
     Input:
         data_bucket_path (str): path to the data file
         image_bucket (str): bucket path where the images are stored (start with gs://)
+        target_id (int): target ID number
     Ouputs:
         image_file_path (str): path to the image file
     """
     data_bucket_path = Path(data_bucket_path)
 
     image_file_path = (
-        Path(image_bucket)
-        / f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
+        Path(image_bucket) / f"{target_id}_{data_bucket_path.name.replace('.nc','.png')}"
     )
 
-    return gs_posixpath_to_str(image_file_path).replace(
-        "gs://", "https://storage.cloud.google.com/"
-    )
+    return gs_posixpath_to_auth_url(image_file_path)
 
 
 def derive_image_drive_link(
     data_bucket_path: str,
     service_account_file: str,
     google_drive_id: str,
+    target_id: int,
 ) -> str:
     """
     Get google drive link for the given
@@ -139,11 +138,12 @@ def derive_image_drive_link(
         data_bucket_path (str): path to the data file
         service_account_file (str): full path to the Google Drive API service account file
         google_drive_id (str): Google Drive folder ID, must have been shared with the service account
+        target_id (int): target ID number
     Outputs:
         image_link (str): link to the image on the Google Drive
     """
     data_bucket_path = Path(str(data_bucket_path).rstrip())
-    image_name = f"{data_bucket_path.parts[3]}_{data_bucket_path.name.replace('.nc','.png')}"
+    image_name = f"{target_id}_{data_bucket_path.name.replace('.nc', '.png')}"
 
     image_link = get_file_link(service_account_file, google_drive_id, image_name)
 
@@ -163,7 +163,72 @@ def gs_posixpath_to_str(p: PosixPath) -> str:
     return str(p).rstrip().replace("gs:/", "gs://")
 
 
-def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwargs) -> dict:
+def gs_posixpath_to_auth_url(p: PosixPath) -> str:
+    """
+    Convert the given gs:// path to an authenticated URL
+    Inputs:
+        p (PosixPath): pathlib.Path object
+    Outputs:
+        (str): the authenticated URL
+    """
+    return gs_posixpath_to_str(p).replace("gs://", "https://storage.cloud.google.com/")
+
+
+def get_target_dict_from_stac(
+    stac_catalog: Client,
+    stac_collection: str,
+    func: Callable = gs_posixpath_to_str,
+    limit: int = 5000,
+    asset_key: Optional[str] = None,
+    **kwargs,
+) -> dict:
+    """
+    Build the dictionary of collections from the STAC database
+
+    Inputs:
+        stac_catalog (str): pystac_client.client.Client object
+        stac_collection (str): collection names to use
+        limit(int): maximum number of items returned by the collection search
+    Outputs:
+        d (dict): dictionary of collections only retaining the highest processing ID for each collection
+    """
+    items = [i for i in stac_catalog.search(collections=[stac_collection], limit=limit)]
+
+    asset_dict = {
+        "MethaneSAT_Level1b": "ch4",
+        "MethaneSAT_Level2_post": "post-product",
+        "MethaneSAT_Level3_regrid": "regrid",
+        "MethaneSAT_Level4_area": "analysis",
+        "MethaneSAT_Level4_area_twostep": "analysis",
+    }
+
+    d = {}
+    for it in items:
+        t = int(it.properties["target_id"])
+        c = it.properties["collection_id"]
+        p = it.properties["processing_id"]
+        two_step_core = it.properties.get("two_step_core", False)
+        collection_name = it.collection_id
+        asset = Path(it.assets[asset_key if asset_key else asset_dict[collection_name]].href)
+        if t not in d:
+            d[t] = {}
+        if c not in d[t]:
+            d[t][c] = {}
+        if d[t][c] != {}:
+            old_p = list(d[t][c].keys())[0]
+            if old_p < p:
+                continue
+            elif old_p == p and not two_step_core:
+                continue
+        kwargs["target_id"] = t
+        d[t][c] = {p: func(asset, **kwargs)}
+
+    return d
+
+
+def get_target_dict_from_file_list(
+    file_list: str, func: Callable = gs_posixpath_to_str, **kwargs
+) -> dict:
     """
     Parse a list of MSAT bucket paths and store them in a dictionary by target/collect/processing_id
 
@@ -210,6 +275,7 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
             elif p == old_p and "interim" not in i.name:
                 # for L4 files, keep the interim run if it exists
                 continue
+        kwargs["target_id"] = t
         d[t][c] = {p: func(i, **kwargs)}
 
     return d
@@ -257,7 +323,7 @@ def get_target_dict_from_images(file_list: str, public_bucket: Optional[str] = N
         if public_bucket:
             file_link = str(Path("https://storage.cloud.google.com") / public_bucket / i.name)
         else:
-            file_link = gs_posixpath_to_str(i).replace("gs://", "https://storage.cloud.google.com/")
+            file_link = gs_posixpath_to_auth_url(i)
         d[t][c] = {p: file_link}
 
     return d
@@ -321,6 +387,8 @@ def make_msat_targets_map(
     infile: str,
     outfile: str,
     title: str = "MethaneSAT targets",
+    stac_catalog: Optional[Client] = None,
+    stac_collection: Optional[str] = None,
     file_list: Optional[str] = None,
     image_bucket: Optional[str] = None,
     html_bucket: Optional[str] = None,
@@ -338,6 +406,8 @@ def make_msat_targets_map(
         infile (str): input geojson file with all the target polygons
         outfile (str): full path to the output html file
         title (str): map title
+        stac_catalog (Optional[Client]): pystac_client.client.Client object
+        stac_collection (Optional[str]): stac collection name to build the target dictionary
         file_list (Optional[str]): full path to list of data bucket files
         service_account_file (str): full path to the Google Drive API service account file
         google_drive_id (str): Google Drive folder ID, must have been shared with the service account
@@ -380,12 +450,14 @@ def make_msat_targets_map(
     ]
 
     map_tools = ["hover", "fullscreen", "tap"]
-    if file_list is not None:
+    if file_list is not None or stac_catalog is not None:
         map_tools += ["box_select"]
         if public:
             td = get_target_dict_from_images(file_list, public_bucket)
+        elif stac_address:
+            td = get_target_dict_from_stac(stac_address, stac_collection)
         else:
-            td = get_target_dict(file_list, gs_posixpath_to_str)
+            td = get_target_dict_from_file_list(file_list)
         first_path = list(next(iter(next(iter(td.values())).values())).values())[0]
         is_L2 = "_L2_" in first_path
         is_L4 = "_L4_" in first_path
@@ -411,25 +483,48 @@ def make_msat_targets_map(
             gdf["html_files"] = ""
             vdims += ["html_files"]
             scatter_df_columns += ["html_file"]
-            if is_L2:
-                html_td = get_target_dict(file_list, derive_L2_html_path)
+            if is_L2 and stac_address:
+                html_td = get_target_dict_from_stac(
+                    stac_address,
+                    stac_collection,
+                    asset_name="qaqc_html_plots",
+                    func=gs_posixpath_to_auth_url,
+                )
+            elif is_L2:
+                html_td = get_target_dict_from_file_list(file_list, derive_L2_html_path)
+            elif is_L4 and stac_address:
+                html_td = get_target_dict_from_stac(
+                    stac_address, stac_collection, derive_L4_html_path, html_bucket=html_bucket
+                )
             elif is_L4:
-                html_td = get_target_dict(file_list, derive_L4_html_path, html_bucket=html_bucket)
+                html_td = get_target_dict_from_file_list(
+                    file_list, derive_L4_html_path, html_bucket=html_bucket
+                )
         if image_bucket is not None:
             gdf["image_gs_files"] = ""
             vdims += ["image_gs_files"]
             scatter_df_columns += ["image_gs_file"]
-            image_td = get_target_dict(file_list, derive_image_path, image_bucket=image_bucket)
+            if stac_address:
+                image_td = get_target_dict_from_stac(
+                    stac_address, stac_collection, derive_image_path, image_bucket=image_bucket
+                )
+            else:
+                image_td = get_target_dict_from_file_list(
+                    file_list, derive_image_path, image_bucket=image_bucket
+                )
         if google_drive_id is not None:
             gdf["image_gdrive_files"] = ""
             vdims += ["image_gdrive_files"]
             scatter_df_columns += ["image_gdrive_file"]
-            gdrive_td = get_target_dict(
-                file_list,
-                derive_image_drive_link,
-                service_account_file=service_account_file,
-                google_drive_id=google_drive_id,
-            )
+            if stac_address:
+                gdrive_td = get_target_dict_from_stac(stac_address, stac_collection)
+            else:
+                gdrive_td = get_target_dict_from_file_list(
+                    file_list,
+                    derive_image_drive_link,
+                    service_account_file=service_account_file,
+                    google_drive_id=google_drive_id,
+                )
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
         # a collection ID has 8 characters
         # characters 4-6 correspond to a specific target
@@ -1259,6 +1354,8 @@ def make_msat_targets_map_tabs(
     outfile: str,
     title: str = "MethaneSAT targets",
     tab_title: Optional[list[str]] = None,
+    stac_catalog: Optional[Client] = None,
+    stac_collection_list: Optional[list[Optional[str]]] = None,
     file_list: Optional[list[Optional[str]]] = None,
     image_bucket: Optional[list[Optional[str]]] = None,
     html_bucket: Optional[list[Optional[str]]] = None,
@@ -1289,6 +1386,8 @@ def make_msat_targets_map_tabs(
                 infile,
                 outfile,
                 title,
+                stac_catalog,
+                stac_collection_list[i],
                 file_list[i],
                 image_bucket[i],
                 html_bucket[i],
@@ -1348,6 +1447,14 @@ def main():
     parser.add_argument("infile", help="full path to the input geojson file")
     parser.add_argument("outfile", help="full path to the output html file")
     parser.add_argument("-t", "--title", default="MethaneSAT targets", help="Map title")
+    parser.add_argument("--stac-address", default=None, help="STAC catalog address")
+    parser.add_argument(
+        "--stac-collection",
+        default=[None],
+        nargs="+",
+        type=none_or_str,
+        help="STAC collection name (e.g. MethaneSAT_Level2_post)",
+    )
     parser.add_argument(
         "-f",
         "--file-list",
@@ -1413,11 +1520,15 @@ def main():
 
     print(datetime.strftime(datetime.utcnow(), "%Y-%m-%d UPDATE MSAT MAP"))
 
+    stac_catalog = Client(args.stac_address)
+
     if len(args.file_list) == 1:
         _ = make_msat_targets_map(
             args.infile,
             args.outfile,
             args.title[0],
+            stac_catalog,
+            args.stac_collection[0],
             args.file_list[0],
             args.image_bucket[0],
             args.html_bucket[0],
@@ -1435,6 +1546,7 @@ def main():
                         len(i)
                         for i in [
                             args.tab_title,
+                            args.stac_collection,
                             args.file_list,
                             args.public_bucket,
                             args.image_bucket,
@@ -1451,6 +1563,8 @@ def main():
             args.infile,
             args.outfile,
             args.title,
+            stac_catalog,
+            args.stac_collection,
             args.tab_title,
             args.file_list,
             args.image_bucket,
