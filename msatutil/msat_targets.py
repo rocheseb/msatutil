@@ -179,6 +179,7 @@ def get_target_dict_from_stac(
     stac_collection: str,
     func: Callable = gs_posixpath_to_str,
     limit: int = 5000,
+    max_flagged_fraction: float = 1,
     asset_key: Optional[str] = None,
     **kwargs,
 ) -> dict:
@@ -207,6 +208,9 @@ def get_target_dict_from_stac(
         t = int(it.properties["target_id"])
         c = it.properties["collection_id"]
         p = it.properties["processing_id"]
+        flagged_fraction = float(it.properties.get("CH4_flagged_fraction", 1.0))
+        if flagged_fraction > max_flagged_fraction:
+            continue
         two_step_core = it.properties.get("two_step_core", False)
         collection_name = it.collection_id
         asset = Path(it.assets[asset_key if asset_key else asset_dict[collection_name]].href)
@@ -389,6 +393,7 @@ def make_msat_targets_map(
     title: str = "MethaneSAT targets",
     stac_catalog: Optional[Client] = None,
     stac_collection: Optional[str] = None,
+    max_flagged_fraction: float = 1,
     file_list: Optional[str] = None,
     image_bucket: Optional[str] = None,
     html_bucket: Optional[str] = None,
@@ -408,6 +413,7 @@ def make_msat_targets_map(
         title (str): map title
         stac_catalog (Optional[Client]): pystac_client.client.Client object
         stac_collection (Optional[str]): stac collection name to build the target dictionary
+        max_flagged_fraction (float): when using stac, only keeps collections with less flagged data
         file_list (Optional[str]): full path to list of data bucket files
         service_account_file (str): full path to the Google Drive API service account file
         google_drive_id (str): Google Drive folder ID, must have been shared with the service account
@@ -454,8 +460,10 @@ def make_msat_targets_map(
         map_tools += ["box_select"]
         if public:
             td = get_target_dict_from_images(file_list, public_bucket)
-        elif stac_address:
-            td = get_target_dict_from_stac(stac_address, stac_collection)
+        elif stac_catalog:
+            td = get_target_dict_from_stac(
+                stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
+            )
         else:
             td = get_target_dict_from_file_list(file_list)
         first_path = list(next(iter(next(iter(td.values())).values())).values())[0]
@@ -483,18 +491,23 @@ def make_msat_targets_map(
             gdf["html_files"] = ""
             vdims += ["html_files"]
             scatter_df_columns += ["html_file"]
-            if is_L2 and stac_address:
+            if is_L2 and stac_catalog:
                 html_td = get_target_dict_from_stac(
-                    stac_address,
+                    stac_catalog,
                     stac_collection,
                     asset_name="qaqc_html_plots",
+                    max_flagged_fraction=max_flagged_fraction,
                     func=gs_posixpath_to_auth_url,
                 )
             elif is_L2:
                 html_td = get_target_dict_from_file_list(file_list, derive_L2_html_path)
-            elif is_L4 and stac_address:
+            elif is_L4 and stac_catalog:
                 html_td = get_target_dict_from_stac(
-                    stac_address, stac_collection, derive_L4_html_path, html_bucket=html_bucket
+                    stac_catalog,
+                    stac_collection,
+                    derive_L4_html_path,
+                    max_flagged_fraction=max_flagged_fraction,
+                    html_bucket=html_bucket,
                 )
             elif is_L4:
                 html_td = get_target_dict_from_file_list(
@@ -504,9 +517,13 @@ def make_msat_targets_map(
             gdf["image_gs_files"] = ""
             vdims += ["image_gs_files"]
             scatter_df_columns += ["image_gs_file"]
-            if stac_address:
+            if stac_catalog:
                 image_td = get_target_dict_from_stac(
-                    stac_address, stac_collection, derive_image_path, image_bucket=image_bucket
+                    stac_catalog,
+                    stac_collection,
+                    derive_image_path,
+                    max_flagged_fraction=max_flagged_fraction,
+                    image_bucket=image_bucket,
                 )
             else:
                 image_td = get_target_dict_from_file_list(
@@ -516,8 +533,10 @@ def make_msat_targets_map(
             gdf["image_gdrive_files"] = ""
             vdims += ["image_gdrive_files"]
             scatter_df_columns += ["image_gdrive_file"]
-            if stac_address:
-                gdrive_td = get_target_dict_from_stac(stac_address, stac_collection)
+            if stac_catalog:
+                gdrive_td = get_target_dict_from_stac(
+                    stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
+                )
             else:
                 gdrive_td = get_target_dict_from_file_list(
                     file_list,
@@ -1356,6 +1375,7 @@ def make_msat_targets_map_tabs(
     tab_title: Optional[list[str]] = None,
     stac_catalog: Optional[Client] = None,
     stac_collection_list: Optional[list[Optional[str]]] = None,
+    max_flagged_fraction_list: Optional[list[float]] = None,
     file_list: Optional[list[Optional[str]]] = None,
     image_bucket: Optional[list[Optional[str]]] = None,
     html_bucket: Optional[list[Optional[str]]] = None,
@@ -1456,6 +1476,13 @@ def main():
         help="STAC collection name (e.g. MethaneSAT_Level2_post)",
     )
     parser.add_argument(
+        "--max-flagged-fraction",
+        default=[1],
+        nargs="+",
+        type=float,
+        help="When using STAC, only keep collects with less than this flagged fraction",
+    )
+    parser.add_argument(
         "-f",
         "--file-list",
         nargs="+",
@@ -1529,6 +1556,7 @@ def main():
             args.title[0],
             stac_catalog,
             args.stac_collection[0],
+            args.max_flagged_fraction[0],
             args.file_list[0],
             args.image_bucket[0],
             args.html_bucket[0],
@@ -1547,6 +1575,7 @@ def main():
                         for i in [
                             args.tab_title,
                             args.stac_collection,
+                            args.max_flagged_fraction,
                             args.file_list,
                             args.public_bucket,
                             args.image_bucket,
@@ -1563,9 +1592,10 @@ def main():
             args.infile,
             args.outfile,
             args.title,
+            args.tab_title,
             stac_catalog,
             args.stac_collection,
-            args.tab_title,
+            args.max_flagged_fraction,
             args.file_list,
             args.image_bucket,
             args.html_bucket,
