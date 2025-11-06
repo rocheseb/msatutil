@@ -10,10 +10,25 @@ import holoviews as hv
 import pandas as pd
 import reverse_geocode
 from bokeh.embed import file_html
-from bokeh.models import (BoxSelectTool, Button, Column, ColumnDataSource,
-                          CustomJS, DateRangeSlider, Div, GlyphRenderer,
-                          HoverTool, InlineStyleSheet, NumericInput, Row,
-                          Select, TabPanel, Tabs, TapTool, TextInput)
+from bokeh.models import (
+    BoxSelectTool,
+    Button,
+    Column,
+    ColumnDataSource,
+    CustomJS,
+    DateRangeSlider,
+    Div,
+    GlyphRenderer,
+    HoverTool,
+    InlineStyleSheet,
+    NumericInput,
+    Row,
+    Select,
+    TabPanel,
+    Tabs,
+    TapTool,
+    TextInput,
+)
 from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
@@ -191,6 +206,9 @@ def get_target_dict(file_list: str, func: Callable = gs_posixpath_to_str, **kwar
         if d[t][c] != {}:
             old_p = list(d[t][c].keys())[0]
             if p < old_p:
+                continue
+            elif p == old_p and "interim" not in i.name:
+                # for L4 files, keep the interim run if it exists
                 continue
         d[t][c] = {p: func(i, **kwargs)}
 
