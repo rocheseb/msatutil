@@ -193,7 +193,7 @@ def get_target_dict_from_stac(
     Outputs:
         d (dict): dictionary of collections only retaining the highest processing ID for each collection
     """
-    items = [i for i in stac_catalog.search(collections=[stac_collection], limit=limit)]
+    items = [i for i in stac_catalog.search(collections=[stac_collection], limit=limit).items()]
 
     asset_dict = {
         "MethaneSAT_Level1b": "ch4",
