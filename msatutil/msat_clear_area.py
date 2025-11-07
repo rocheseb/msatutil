@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
+from msatutil.msat_targets import get_target_dict_from_file_list, gs_posixpath_to_str
 
 
 def derive_L2_qc_path(l2pp_file_path: str) -> str:
@@ -40,8 +40,8 @@ def msat_clear_area(
     Write a list of bucket paths for corresponding L3 collections, to be ingested by msat_targets
     """
 
-    d = get_target_dict(l2_file_list, derive_L2_qc_path)
-    dl3 = get_target_dict(l3_file_list)
+    d = get_target_dict_from_file_list(l2_file_list, derive_L2_qc_path)
+    dl3 = get_target_dict_from_file_list(l3_file_list)
 
     l3_collections = [c for t in dl3 for c in dl3[t]]
 

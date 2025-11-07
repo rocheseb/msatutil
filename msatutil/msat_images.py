@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 from pyproj import Transformer
+from pystac_client import Client
 
 from msatutil.mair_geoviews import save_static_plot_with_widgets, show_map
 from msatutil.msat_gdrive import upload_file as google_drive_upload
 from msatutil.msat_interface import msat_collection
-from msatutil.msat_targets import get_target_dict, gs_posixpath_to_str
+from msatutil.msat_targets import get_target_dict_from_file_list, get_target_dict_from_stac, gs_posixpath_to_str
 
 
 def qaqc_filter(qaqc_file) -> bool:
@@ -437,9 +438,9 @@ def main():
     )
     args = parser.parse_args()
 
-    td = get_target_dict(args.file_list)
+    td = get_target_dict_from_file_list(args.file_list)
     if args.qaqc_list:
-        qcd = get_target_dict(args.qaqc_list)
+        qcd = get_target_dict_from_file_list(args.qaqc_list)
     for t in td:
         for c in td[t]:
             for p in td[t][c]:

@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from typing import Callable, Optional, Union
+from typing import Optional, Union
 
 import geopandas as gpd
 import numpy as np
