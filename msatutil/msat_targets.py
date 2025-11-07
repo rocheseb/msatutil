@@ -1486,7 +1486,7 @@ def main():
         "-f",
         "--file-list",
         nargs="+",
-        required=True,
+        default=[None],
         type=none_or_str,
         help="full path to a list of bucket path, the collections file paths will be added to the targets hover tooltips",
     )
