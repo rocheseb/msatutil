@@ -150,7 +150,7 @@ def derive_image_drive_link(
     return image_link
 
 
-def gs_posixpath_to_str(p: PosixPath) -> str:
+def gs_posixpath_to_str(p: PosixPath, **kwargs) -> str:
     """
     pathlib.Path turns // into / when doing str(p)
     This restore the gs://
@@ -163,7 +163,7 @@ def gs_posixpath_to_str(p: PosixPath) -> str:
     return str(p).rstrip().replace("gs:/", "gs://")
 
 
-def gs_posixpath_to_auth_url(p: PosixPath) -> str:
+def gs_posixpath_to_auth_url(p: PosixPath, **kwargs) -> str:
     """
     Convert the given gs:// path to an authenticated URL
     Inputs:
