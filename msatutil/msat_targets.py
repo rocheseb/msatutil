@@ -203,13 +203,34 @@ def get_target_dict_from_stac(
         "MethaneSAT_Level4_area_twostep": "analysis",
     }
 
+    L2_flagged_fraction_dict = {}
+    L2_pid_dict = {}
+    if max_flagged_fraction < 1:
+        if stac_collection == "MethaneSAT_Level2_post":
+            L2_items = items
+        else:
+            # also read the L2_post collection to get the flagged fraction
+            L2_items = [
+                i
+                for i in stac_catalog.search(
+                    collections=["MethaneSAT_Level2_post"], limit=limit
+                ).items()
+            ]
+        for it in L2_items:
+            c = it.properties["collection_id"]
+            p = int(it.properties["processing_id"])
+            flagged_fraction = float(it.properties["CH4_flagged_fraction"])
+            # use the flagged fraction from the most recent PID for each collect
+            if p > L2_pid_dict.get(c, 0):
+                L2_pid_dict[c] = p
+                L2_flagged_fraction_dict[c] = flagged_fraction
+
     d = {}
     for it in items:
         t = int(it.properties["target_id"])
         c = it.properties["collection_id"]
         p = it.properties["processing_id"]
-        flagged_fraction = float(it.properties.get("CH4_flagged_fraction", 1.0))
-        if flagged_fraction > max_flagged_fraction:
+        if L2_flagged_fraction_dict.get(c, 1) > max_flagged_fraction:
             continue
         two_step_core = it.properties.get("two_step_core", False)
         collection_name = it.collection_id
