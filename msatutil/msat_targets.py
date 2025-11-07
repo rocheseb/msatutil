@@ -516,7 +516,7 @@ def make_msat_targets_map(
                 html_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
-                    asset_name="qaqc_html_plots",
+                    asset_key="qaqc_html_plots",
                     max_flagged_fraction=max_flagged_fraction,
                     func=gs_posixpath_to_auth_url,
                 )
