@@ -722,7 +722,7 @@ def make_msat_targets_map(
         """,
     )
 
-    if file_list is not None:
+    if file_list is not None or stac_catalog is not None:
         if not public:
             target_code_div = Div(text="Target ID:", width=300)
             target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
@@ -1182,7 +1182,7 @@ def make_msat_targets_map(
         country_div.text = ids_in_country.length + " target IDs in selected country:<br>"+formattedText;
         """
 
-    if file_list is not None:
+    if file_list is not None or stac_catalog is not None:
         country_input_callback_code += """
             const countries_scatter = scatter_source.data["country"];
             const ncollects = countries_scatter.filter(item => item === cb_obj.value).length;
@@ -1254,7 +1254,7 @@ def make_msat_targets_map(
         ),
     )
 
-    if file_list is not None:
+    if file_list is not None or stac_catalog is not None:
         if public:
             note_div = Div(
                 width=1000,
