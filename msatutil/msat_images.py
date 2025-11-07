@@ -15,7 +15,11 @@ from pystac_client import Client
 from msatutil.mair_geoviews import save_static_plot_with_widgets, show_map
 from msatutil.msat_gdrive import upload_file as google_drive_upload
 from msatutil.msat_interface import msat_collection
-from msatutil.msat_targets import get_target_dict_from_file_list, get_target_dict_from_stac, gs_posixpath_to_str
+from msatutil.msat_targets import (
+    get_target_dict_from_file_list,
+    get_target_dict_from_stac,
+    gs_posixpath_to_str,
+)
 
 
 def qaqc_filter(qaqc_file) -> bool:
@@ -349,7 +353,7 @@ def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
     del lat, lon, xch4, albedo, flux, l4_plot, plot
     if l3_file is not None:
         del l3_plot_xch4, l3_plot_albedo
-    
+
     gc.collect()
 
 
@@ -375,10 +379,16 @@ def download_file(download_dir: str, p: Path, use_mount: bool) -> Path:
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--stac-address", default=None, help="STAC catalog address")
+    parser.add_argument(
+        "--stac-collection",
+        default=None,
+        help="STAC collection name (e.g. MethaneSAT_Level2_post)",
+    )
     parser.add_argument(
         "-f",
         "--file-list",
-        required=True,
+        default=None,
         help="input file with list of bucket paths",
     )
     parser.add_argument(
@@ -434,13 +444,23 @@ def main():
         help="if given, make html maps",
     )
     parser.add_argument(
-        "--use-mount", action="store_true", help="if given, use /mnt/gcs/ instead of gs://"
+        "--use-mount", action="store_true", help="if given, convert gs:// paths to /mnt/gcs/"
     )
     args = parser.parse_args()
 
-    td = get_target_dict_from_file_list(args.file_list)
+    if args.stac_address:
+        stac_catalog = Client(args.stac_address)
+        td = get_target_dict_from_stac(stac_catalog, args.stac_collection)
+        args.qaqc_list = True
+    else:
+        td = get_target_dict_from_file_list(args.file_list)
     if args.qaqc_list:
-        qcd = get_target_dict_from_file_list(args.qaqc_list)
+        if args.stac_address:
+            qcd = get_target_dict_from_stac(
+                stac_catalog, "MethaneSAT_Level2_post", asset_key="qaqc_summary"
+            )
+        else:
+            qcd = get_target_dict_from_file_list(args.qaqc_list)
     for t in td:
         for c in td[t]:
             for p in td[t][c]:
