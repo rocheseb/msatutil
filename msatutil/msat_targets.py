@@ -197,7 +197,7 @@ def get_target_dict_from_stac(
 
     asset_dict = {
         "MethaneSAT_Level1b": "ch4",
-        "MethaneSAT_Level2_post": "post-product",
+        "MethaneSAT_Level2_post": "post_product",
         "MethaneSAT_Level3_regrid": "regrid",
         "MethaneSAT_Level4_area": "analysis",
         "MethaneSAT_Level4_area_twostep": "analysis",
