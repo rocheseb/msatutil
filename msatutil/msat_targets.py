@@ -1408,6 +1408,7 @@ def make_msat_targets_map_tabs(
                 title,
                 stac_catalog,
                 stac_collection_list[i],
+                max_flagged_fraction_list[i],
                 file_list[i],
                 image_bucket[i],
                 html_bucket[i],
