@@ -99,7 +99,7 @@ def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int)
     data_bucket_path = Path(data_bucket_path)
 
     image_file_path = (
-        Path(html_bucket) / f"{target_id}_{data_bucket_path.name.replace('.nc','.html')}"
+        Path(html_bucket) / f"t{target_id}_{data_bucket_path.name.replace('.nc','.html')}"
     )
 
     return gs_posixpath_to_auth_url(image_file_path)
@@ -120,7 +120,7 @@ def derive_image_path(data_bucket_path: str, image_bucket: str, target_id: int) 
     data_bucket_path = Path(data_bucket_path)
 
     image_file_path = (
-        Path(image_bucket) / f"{target_id}_{data_bucket_path.name.replace('.nc','.png')}"
+        Path(image_bucket) / f"t{target_id}_{data_bucket_path.name.replace('.nc','.png')}"
     )
 
     return gs_posixpath_to_auth_url(image_file_path)
@@ -143,7 +143,7 @@ def derive_image_drive_link(
         image_link (str): link to the image on the Google Drive
     """
     data_bucket_path = Path(str(data_bucket_path).rstrip())
-    image_name = f"{target_id}_{data_bucket_path.name.replace('.nc', '.png')}"
+    image_name = f"t{target_id}_{data_bucket_path.name.replace('.nc', '.png')}"
 
     image_link = get_file_link(service_account_file, google_drive_id, image_name)
 
