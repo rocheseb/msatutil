@@ -41,6 +41,7 @@ notebooks = [
     "pyproj",
     "contextily==1.6.2",
     "reverse_geocode",
+    "pystac",
 ]
 gdrive = [
     "google-auth",
