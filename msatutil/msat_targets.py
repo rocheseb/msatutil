@@ -1569,7 +1569,7 @@ def main():
 
     print(datetime.strftime(datetime.utcnow(), "%Y-%m-%d UPDATE MSAT MAP"))
 
-    stac_catalog = Client.open(args.stac_address)
+    stac_catalog = Client.open(args.stac_address) if args.stac_address else None
 
     if len(args.file_list) == 1:
         _ = make_msat_targets_map(
