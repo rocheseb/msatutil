@@ -247,6 +247,19 @@ def read_l4(l4_file: str):
             l3_file = l4["ProcessingMetadata"].level3_product.replace("[prod]", l3_root)
         else:
             l3_file = None
+    if l3_file is None:
+        # two-step core file
+        # get the L3 file path from the core file metadata
+        l4_file = Path(l4_file.replace("_interim", ""))
+        l4_core_file = Path(*[p for p in l4_file.parts if p != "two_step_core"])
+        if l4_core_file.exists():
+            with Dataset(l4_core_file) as l4:
+                if "ProcessingMetadata" in l4.groups:
+                    l3_file = l4["ProcessingMetadata"].level3_product.replace("[prod]", l3_root)
+                else:
+                    l3_file = None
+        else:
+            l3_file = None
 
     xx, yy = np.meshgrid(x, y, indexing="ij")
 
