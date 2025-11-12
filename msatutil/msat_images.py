@@ -132,6 +132,8 @@ def plot_l1(l1_file, outfile, title="", add_basemap=False, dpi=300):
     fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
     plt.close(fig)
     l1.close()
+    del fig, ax
+    gc.collect()
 
 
 def plot_l2(l2_file, outfile, title="", flagged=False, add_basemap=False, dpi=300):
@@ -180,6 +182,8 @@ def plot_l2(l2_file, outfile, title="", flagged=False, add_basemap=False, dpi=30
     fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
     plt.close(fig)
     l2.close()
+    del fig, ax
+    gc.collect()
 
 
 def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
@@ -225,6 +229,8 @@ def plot_l3(l3_file, outfile, title="", add_basemap=False, dpi=300):
     fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
     plt.close(fig)
     l3.close()
+    del fig, ax
+    gc.collect()
 
 
 def read_l4(l4_file: str):
@@ -297,6 +303,8 @@ def plot_l4(l4_file, outfile, title="", add_basemap=False, dpi=300):
     ax.set_title(title, fontsize=7)
     fig.savefig(outfile, bbox_inches="tight", dpi=dpi, transparent=False)
     plt.close(fig)
+    del fig, ax
+    gc.collect()
 
 
 def plot_l4_html(l4_file, outfile, title="", width=550, height=450):
