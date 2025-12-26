@@ -7,7 +7,7 @@ import pandas as pd
 from msatutil.msat_targets import get_target_dict_from_file_list, gs_posixpath_to_str
 
 
-def derive_L2_qc_path(l2pp_file_path: str) -> str:
+def derive_L2_qc_path(l2pp_file_path: str, **kwargs) -> str:
     """
     Return the qaqc html path corresponding to a L2 post-processed file
 
