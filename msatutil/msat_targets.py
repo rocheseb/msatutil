@@ -267,17 +267,21 @@ def get_target_dict_from_file_list(
     with open(file_list, "r") as fin:
         file_list = [Path(i.strip()) for i in fin.readlines()]
     is_L0 = "_L0_" in str(file_list[0])
-    if is_L0:
-        tindex = 2
-        cindex = 6
-        pindex = 7
-    else:
-        tindex = 3
-        cindex = 5
-        pindex = 6
+    tindex = 3
+    cindex = 5
+    pindex = 6
 
     d = {}
     for i in file_list:
+        if is_L0 and "MOS" in str(i):
+            tindex = 3
+            cindex = 7
+            pindex = 8
+        elif is_L0:
+            tindex = 2
+            cindex = 6
+            pindex = 7
+
         t = int(i.parts[tindex].strip("t"))
         c = i.parts[cindex].strip("c")
         if is_L0:
