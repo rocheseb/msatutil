@@ -65,7 +65,9 @@ def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     return None
 
 
-def derive_L2_html_path(l2pp_file_path: str, **kwargs) -> str:
+def derive_L2_html_path(
+    l2pp_file_path: str, target_id: int, collection_id: str, processing_id: int, **kwargs
+) -> str:
     """
     Return the qaqc html path corresponding to a L2 post-processed file
 
@@ -76,14 +78,16 @@ def derive_L2_html_path(l2pp_file_path: str, **kwargs) -> str:
     """
     l2pp_file_path = Path(l2pp_file_path)
     try:
-        html_file_path = gs_list(gs_posixpath_to_str(l2pp_file_path.parent / "qaqc"), "*html")[0]
+        html_file_path = Path(
+            gs_list(gs_posixpath_to_str(l2pp_file_path.parent / "qaqc"), "*html")[0]
+        )
     except IndexError:
-        html_file_path = ""
+        html_file_path = f"No QAQC found for t{target_id} c{collection_id} p{processing_id}"
 
     return gs_posixpath_to_auth_url(html_file_path)
 
 
-def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int) -> str:
+def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int, **kwargs) -> str:
     """
     Return the html path corresponding to a L4 .nc data file
     This will assume each data file has an existing corresponding html file.
@@ -104,7 +108,7 @@ def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int)
     return gs_posixpath_to_auth_url(image_file_path)
 
 
-def derive_image_path(data_bucket_path: str, image_bucket: str, target_id: int) -> str:
+def derive_image_path(data_bucket_path: str, image_bucket: str, target_id: int, **kwargs) -> str:
     """
     Return the image path corresponding to a .nc data file
     This will assume each data file has an existing corresponding image file.
@@ -130,6 +134,7 @@ def derive_image_drive_link(
     service_account_file: str,
     google_drive_id: str,
     target_id: int,
+    **kwargs,
 ) -> str:
     """
     Get google drive link for the given
@@ -247,6 +252,8 @@ def get_target_dict_from_stac(
             elif old_p == p and not two_step_core:
                 continue
         kwargs["target_id"] = t
+        kwargs["collection_id"] = c
+        kwargs["processing_id"] = p
         d[t][c] = {p: func(asset, **kwargs)}
 
     return d
@@ -306,6 +313,8 @@ def get_target_dict_from_file_list(
                 # for L4 files, keep the interim run if it exists
                 continue
         kwargs["target_id"] = t
+        kwargs["collection_id"] = c
+        kwargs["processing_id"] = p
         d[t][c] = {p: func(i, **kwargs)}
 
     return d
