@@ -34,6 +34,7 @@ from bokeh.resources import CDN
 from geoviews.element import WMTS
 from pystac_client import Client
 
+from msatutil.msat_dset import gs_list
 from msatutil.msat_gdrive import get_file_link
 
 gv.extension("bokeh")
@@ -64,22 +65,20 @@ def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     return None
 
 
-def derive_L2_html_path(l2pp_file_path: str, target_id: int) -> str:
+def derive_L2_html_path(l2pp_file_path: str, **kwargs) -> str:
     """
     Return the qaqc html path corresponding to a L2 post-processed file
 
     Input:
         l2pp_file_path (str): path to the L2 post-processed file
-        target_id (int): target ID number
     Ouputs:
         html_file_path (str): path to the L2 qaqc file
     """
     l2pp_file_path = Path(l2pp_file_path)
-    html_file_path = (
-        l2pp_file_path.parent
-        / "qaqc"
-        / l2pp_file_path.name.replace("_L2_", "_L2_QAQC_Plots_").replace(".nc", ".html")
-    )
+    try:
+        html_file_path = gs_list(gs_posixpath_to_str(l2pp_file_path.parent / "qaqc"), "*html")[0]
+    except IndexError:
+        html_file_path = ""
 
     return gs_posixpath_to_auth_url(html_file_path)
 
@@ -99,7 +98,7 @@ def derive_L4_html_path(data_bucket_path: str, html_bucket: str, target_id: int)
     data_bucket_path = Path(data_bucket_path)
 
     image_file_path = (
-        Path(html_bucket) / f"t{target_id}_{data_bucket_path.name.replace('.nc','.html')}"
+        Path(html_bucket) / f"t{target_id}_{data_bucket_path.name.replace('.nc', '.html')}"
     )
 
     return gs_posixpath_to_auth_url(image_file_path)
@@ -190,6 +189,8 @@ def get_target_dict_from_stac(
         stac_catalog (str): pystac_client.client.Client object
         stac_collection (str): collection names to use
         limit(int): maximum number of items returned by the collection search
+        max_flagged_fraction (float): only includes collections that have less than this flag fraction
+        asset_key (Optional[str]): the stac asset name to use (defaults to the netcdf data file)
     Outputs:
         d (dict): dictionary of collections only retaining the highest processing ID for each collection
     """
