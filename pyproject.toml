@@ -9,21 +9,20 @@ authors = [
     { name = "Sebastien Roche", email = "sroche@g.harvard.edu" }
 ]
 license = { file = "LICENSE.md" }
-requires-python = ">=3.9,<3.12"
+requires-python = ">=3.12"
 urls."Homepage" = "https://github.com/rocheseb/msatutil"
 classifiers = [
     "Operating System :: OS Independent",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
 ]
 dynamic = ["version"]
 dependencies = [
-    "dask[dataframe]==2024.6.2",
-    "netcdf4==1.6.5",
-    "matplotlib==3.8.4",
-    "pandas==2.2.3",
-    "scipy==1.12.0",
+    "dask[dataframe]",
+    "netcdf4",
+    "matplotlib",
+    "pandas",
+    "scipy",
     "tqdm",
     "google-cloud-storage",
     "pyogrio",
@@ -34,12 +33,12 @@ notebooks = [
     "notebook",
     "panel==1.5.0",
     "holoviews==1.19.1",
-    "cartopy==0.23.0",
-    "geoviews==1.13.0",
-    "geopandas==1.0.1",
-    "datashader==0.16.3",
+    "cartopy",
+    "geoviews",
+    "geopandas",
+    "datashader",
     "pyproj",
-    "contextily==1.6.2",
+    "contextily",
     "reverse_geocode",
     "pystac-client",
 ]

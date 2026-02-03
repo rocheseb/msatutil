@@ -24,7 +24,6 @@ from matplotlib.collections import PolyCollection
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from pyproj import Transformer
 from scipy.interpolate import griddata
-from scipy.interpolate.interpnd import _ndim_coords_from_arrays
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon
 from tqdm import tqdm
