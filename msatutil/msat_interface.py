@@ -31,6 +31,7 @@ from tqdm import tqdm
 from msatutil.make_hist import make_hist
 from msatutil.msat_dset import gs_list
 from msatutil.msat_nc import MSATError, msat_nc
+from msatutil.regrid import Regridder
 
 GOOGLE_TILE_SOURCE = "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
 
@@ -66,31 +67,6 @@ def get_msat_file(file_path: str):
     return msat_nc(file_path, use_dask=True)
 
 
-def meters_to_lat_lon(x: float, lat: float) -> float:
-    """
-    Convert a distance in meters to latitudinal and longitudinal angles at a given latitude
-    https://en.wikipedia.org/wiki/Geographic_coordinate_system
-    Uses WGS84 https://en.wikipedia.org/wiki/World_Geodetic_System
-
-    Inputs:
-        x: distance (meters)
-        lat: latitude (degrees)
-    Outputs:
-        (lat_deg,lon_deg): latitudinal and longitudinal angles corresponding to x (degrees)
-
-    """
-    lat = np.deg2rad(lat)
-    meters_per_lat_degree = (
-        111132.92 - 559.82 * np.cos(2 * lat) + 1.175 * np.cos(4 * lat) - 0.0023 * np.cos(6 * lat)
-    )
-
-    meters_per_lon_degree = (
-        111412.84 * np.cos(lat) - 93.5 * np.cos(3 * lat) + 0.118 * np.cos(5 * lat)
-    )
-
-    return x / meters_per_lat_degree, x / meters_per_lon_degree
-
-
 def create_polygons(
     corner_lon: np.ndarray[float], corner_lat: np.ndarray[float]
 ) -> np.ndarray[Polygon]:
@@ -120,42 +96,6 @@ def create_polygons(
                 raise e
             polygons.append(poly)
     return np.array(polygons)
-
-
-def filter_large_triangles(points: np.ndarray, tri: Optional[Delaunay] = None, coeff: float = 2.0):
-    """
-    Filter out triangles that have an edge > coeff * median(edge)
-    Inputs:
-        tri: scipy.spatial.Delaunay object
-        coeff: triangles with an edge > coeff * median(edge) will be filtered out
-    Outputs:
-        valid_slice: boolean array that select for the triangles that
-    """
-    if tri is None:
-        tri = Delaunay(points)
-
-    edge_lengths = np.zeros(tri.simplices.shape)
-    seen = {}
-    # loop over triangles
-    for i, vertex in enumerate(tri.simplices):
-        # loop over edges
-        for j in range(3):
-            id0 = vertex[j]
-            id1 = vertex[(j + 1) % 3]
-
-            # avoid calculating twice for non-border edges
-            if (id0, id1) in seen:
-                edge_lengths[i, j] = seen[(id0, id1)]
-            else:
-                edge_lengths[i, j] = np.linalg.norm(points[id1] - points[id0])
-
-                seen[(id0, id1)] = edge_lengths[i, j]
-
-    median_edge = np.median(edge_lengths.flatten())
-
-    valid_slice = np.all(edge_lengths < coeff * median_edge, axis=1)
-
-    return valid_slice
 
 
 def chunked(lst: List, n: int):
@@ -675,6 +615,8 @@ class msat_collection:
         res: float = 20,
         set_nan: Optional[float] = None,
         use_valid_xtrack: bool = False,
+        lon_var: str = "longitude",
+        lat_var: str = "latitude",
     ) -> da.core.Array:
         """
         get a variable ready to plot with plt.pcolormesh(lon_grid,lat_grid,x_grid_avg)
@@ -711,15 +653,7 @@ class msat_collection:
             f"Calling grid_prep on {len(list(ids.keys()))} files, divided in {len(chunked_ids)} chunks of {n} files\n"
         )
 
-        mid_lat = (lat_lim[1] - lat_lim[0]) / 2.0
-
-        lat_res, lon_res = meters_to_lat_lon(res, mid_lat)
-
-        lon_range = da.arange(lon_lim[0], lon_lim[1], lon_res)
-        lat_range = da.arange(lat_lim[0], lat_lim[1], lat_res)
-
-        # compute the lat-lon grid now so it doesn't have to be computed for each griddata call
-        lon_grid, lat_grid = dask.compute(*da.meshgrid(lon_range, lat_range))
+        regridder = Regridder(lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1], (res,res))
 
         x_grid_list = []
         for i, ids_slice in enumerate(chunked_ids):
@@ -741,62 +675,20 @@ class msat_collection:
             ).compute()
 
             lat = self.pmesh_prep(
-                "Latitude", ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+                lat_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
             ).compute()
             lon = self.pmesh_prep(
-                "Longitude", ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+                lon_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
             ).compute()
 
-            nonan = ~np.isnan(x)
-            flat_x = x[nonan]
-            flat_lat = lat[nonan]
-            flat_lon = lon[nonan]
-
-            x_grid = griddata(
-                (flat_lon, flat_lat),
-                flat_x,
-                (lon_grid, lat_grid),
-                method=method,
-                rescale=True,
-            )
-
-            cloud_points = _ndim_coords_from_arrays((flat_lon, flat_lat))
-            regrid_points = _ndim_coords_from_arrays((lon_grid.ravel(), lat_grid.ravel()))
-            tri = Delaunay(cloud_points)
-
-            outside_hull = np.zeros(lon_grid.size).astype(bool)
-            if method == "nearest":
-                # filter out the extrapolated points when using nearest neighbors
-                outside_hull = tri.find_simplex(regrid_points) < 0
-
-            # filter out points that fall in large triangles
-            # create a new scipy.spatial.Delaunay object with only the large triangles
-            large_triangles = ~filter_large_triangles(cloud_points, tri)
-            large_triangle_ids = np.where(large_triangles)[0]
-            subset_tri = tri  # this doesn't preserve tri, effectively just a renaming
-            # the find_simplex method only needs the simplices and neighbors
-            subset_tri.nsimplex = large_triangle_ids.size
-            subset_tri.simplices = tri.simplices[large_triangles]
-            subset_tri.neighbors = tri.neighbors[large_triangles]
-            # update neighbors
-            for i, triangle in enumerate(subset_tri.neighbors):
-                for j, neighbor_id in enumerate(triangle):
-                    if neighbor_id in large_triangle_ids:
-                        # reindex the neighbors to match the size of the subset
-                        subset_tri.neighbors[i, j] = np.where(large_triangle_ids == neighbor_id)[0]
-                    elif neighbor_id >= 0 and (neighbor_id not in large_triangle_ids):
-                        # that neighbor was a "normal" triangle that should not exist in the subset
-                        subset_tri.neighbors[i, j] = -1
-            inside_large_triangles = subset_tri.find_simplex(regrid_points, bruteforce=True) >= 0
-            invalid_slice = np.logical_or(outside_hull, inside_large_triangles)
-            x_grid[invalid_slice.reshape(x_grid.shape)] = np.nan
+            _, _, x_grid = regridder(lon,lat,x)
 
             x_grid_list.append(x_grid)
 
         stacked_grid = da.stack(x_grid_list, axis=0)
         x_grid_avg = da.nanmean(stacked_grid, axis=0)
 
-        return lon_grid, lat_grid, x_grid_avg
+        return reggrider.lon_grid, regridder.lat_grid, x_grid_avg
 
     def heatmap_loop(self, id_chunk: int, ax: Optional[plt.Axes] = None, **kwargs):
         """

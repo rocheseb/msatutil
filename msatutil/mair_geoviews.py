@@ -111,40 +111,6 @@ def get_pixel_dims(
     return width_pixels, height_pixels
 
 
-def regrid(
-    x: np.ndarray,
-    y: np.ndarray,
-    z: np.ndarray,
-    pixel_resolution: tuple[float, float],
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Regrid the input data to roughly the given resolution (in meters)
-
-    Inputs:
-        x: 1D or 2D array of longitudes (shape (N,) or (M,N))
-        y: 1D or 2D array of latitudes (shape (M,) or (M,N))
-        z: 2D array of the data to plot (shape (M,N))
-        pixel_resolution (tuple[float,float]): desired pixel (width,height) in meters
-    Outputs:
-        tuple[np.ndarray, np.ndarray, np.ndarray]: output lon, lat, and regridded field
-    """
-    width_pixels, height_pixels = get_pixel_dims(
-        [np.nanmin(x), np.nanmin(y), np.nanmax(x), np.nanmax(y)],
-        pixel_resolution[0],
-        pixel_resolution[1],
-    )
-    da = xr.DataArray(
-        z,
-        name="Z",
-        dims=["y", "x"],
-        coords={"Longitude": (["y", "x"], x), "Latitude": (["y", "x"], y)},
-    )
-    canvas = ds.Canvas(plot_width=width_pixels, plot_height=height_pixels)
-    quadmesh = canvas.quadmesh(da, x="Longitude", y="Latitude")
-
-    return quadmesh.Longitude.values, quadmesh.Latitude.values, quadmesh.values
-
-
 def show_map(
     x,
     y,
