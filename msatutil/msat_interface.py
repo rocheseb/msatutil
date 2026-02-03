@@ -234,6 +234,7 @@ class msat_collection:
         self.is_l2_met = self.msat_files[self.ids[0]].is_l2_met
         self.is_postproc = self.msat_files[self.ids[0]].is_postproc
         self.is_l3 = self.msat_files[self.ids[0]].is_l3
+        self.set_lon_lat_vars()
         self.valid_xtrack = self.get_valid_xtrack()
         self.dim_size_map = self.msat_files[self.ids[0]].dim_size_map
         # when using self.get_dim_map(var_path), the result maps dimensions to dimension axis using the common set of dimensions names common_dim_set
@@ -615,8 +616,6 @@ class msat_collection:
         res: float = 20,
         set_nan: Optional[float] = None,
         use_valid_xtrack: bool = False,
-        lon_var: str = "longitude",
-        lat_var: str = "latitude",
     ) -> da.core.Array:
         """
         get a variable ready to plot with plt.pcolormesh(lon_grid,lat_grid,x_grid_avg)
@@ -653,7 +652,7 @@ class msat_collection:
             f"Calling grid_prep on {len(list(ids.keys()))} files, divided in {len(chunked_ids)} chunks of {n} files\n"
         )
 
-        regridder = Regridder(lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1], (res,res))
+        regridder = Regridder(lon_lim[0], lon_lim[1], lat_lim[0], lat_lim[1], (res, res))
 
         x_grid_list = []
         for i, ids_slice in enumerate(chunked_ids):
@@ -675,20 +674,20 @@ class msat_collection:
             ).compute()
 
             lat = self.pmesh_prep(
-                lat_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+                self.lat_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
             ).compute()
             lon = self.pmesh_prep(
-                lon_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
+                self.lon_var, ids=ids_slice, chunks=chunks, use_valid_xtrack=use_valid_xtrack
             ).compute()
 
-            _, _, x_grid = regridder(lon,lat,x)
+            _, _, x_grid = regridder(lon, lat, x)
 
             x_grid_list.append(x_grid)
 
         stacked_grid = da.stack(x_grid_list, axis=0)
         x_grid_avg = da.nanmean(stacked_grid, axis=0)
 
-        return reggrider.lon_grid, regridder.lat_grid, x_grid_avg
+        return regridder.lon_grid, regridder.lat_grid, x_grid_avg
 
     def heatmap_loop(self, id_chunk: int, ax: Optional[plt.Axes] = None, **kwargs):
         """
@@ -707,6 +706,23 @@ class msat_collection:
             kwargs["ids"] = ids
             _ = self.heatmap(**kwargs)
 
+    def set_lon_lat_vars(self):
+        if self.is_l3:
+            lon_str = "lon"
+            lat_str = "lat"
+        elif self.is_postproc:
+            lon_str = "geolocation/longitude"
+            lat_str = "geolocation/latitude"
+        elif self.is_l1 or self.is_l2_met:
+            lon_str = "Geolocation/Longitude"
+            lat_str = "Geolocation/Latitude"
+        elif self.is_l2:
+            lon_str = "Level1/Longitude"
+            lat_str = "Level1/Latitude"
+
+        self.lon_var = lon_str
+        self.lat_var = lat_str
+
     def save_geolocation(
         self,
         ids: Optional[List[int]] = None,
@@ -723,22 +739,6 @@ class msat_collection:
         else:
             ids = {i: self.ids[i] for i in ids}
 
-        if self.is_l3:
-            lon_str = "lon"
-            lat_str = "lat"
-        elif use_corners:
-            lon_str = "CornerLongitude" if not self.is_postproc else "longitude_bounds"
-            lat_str = "CornerLatitude" if not self.is_postproc else "latitude_bounds"
-        elif self.is_postproc:
-            lon_str = "geolocation/longitude"
-            lat_str = "geolocation/latitude"
-        elif self.is_l1 or self.is_l2_met:
-            lon_str = "Geolocation/Longitude"
-            lat_str = "Geolocation/Latitude"
-        elif self.is_l2:
-            lon_str = "Level1/Longitude"
-            lat_str = "Level1/Latitude"
-
         key = f"{list(ids.keys())}_{use_valid_xtrack}"
 
         if use_corners and self.vertices is not None and key in self.vertices:
@@ -747,15 +747,22 @@ class msat_collection:
         if not use_corners and self.lat is not None and key in self.lat:
             return key
 
+        if use_corners:
+            lon_var = "CornerLongitude" if not self.is_postproc else "longitude_bounds"
+            lat_var = "CornerLatitude" if not self.is_postproc else "latitude_bounds"
+        else:
+            lon_var = self.lon_var
+            lat_var = self.lat_var
+
         lat = self.pmesh_prep(
-            lat_str,
+            lat_var,
             ids=ids,
             chunks=chunks,
             use_valid_xtrack=use_valid_xtrack,
         )
 
         lon = self.pmesh_prep(
-            lon_str,
+            lon_var,
             ids=ids,
             chunks=chunks,
             use_valid_xtrack=use_valid_xtrack,

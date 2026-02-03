@@ -106,7 +106,8 @@ def regrid_to_canvas(
             "Latitude": (["y", "x"], y),
         },
     )
-    quadmesh = canvas.quadmesh(da, x="Longitude", y="Latitude")
+    with np.errstate(invalid="ignore"):
+        quadmesh = canvas.quadmesh(da, x="Longitude", y="Latitude")
     return quadmesh.values
 
 
