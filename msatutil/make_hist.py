@@ -18,7 +18,7 @@ def make_hist(
     x: array of data
     kwargs: passed to matplotlib.pyplot.hist
     """
-    x = x[np.isfinite(x)]
+    x = x[np.isfinite(x)].copy()
     
     if "range" in kwargs and kwargs["range"] is not None:
         rng_slice = (x > kwargs["range"][0]) & (x <= kwargs["range"][1])
