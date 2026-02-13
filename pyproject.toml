@@ -32,7 +32,7 @@ dependencies = [
 notebooks = [
     "notebook",
     "panel",
-    "holoviews",
+    "holoviews~=1.22",
     "cartopy",
     "geoviews",
     "geopandas",
