@@ -101,65 +101,23 @@ Or using the **mairhtml** console script with a direct file path and the **--ser
 
 `jupyter notebook msatutil/notebooks/mair_geoviews.ipynb`
 
+# Bokeh application for L1B spectra
 
-# Console scripts
+[msat_diagnostics_app](msatutil/msat_diagnostics_app.py) is a bokeh application that launch a local webserver to interface with L1B files.
 
-**mairls** is a console entry point for listing and subsetting MethaneAIR files from csv tables of metadata
+It has a 2D map of the given target, and the spectrum of the clicked sounding is displayed in another plot.
 
-It interfaces with [mair_ls.py](msatutil/mair_ls.py)
+Launch the app with:
 
-Check detailed usage info with
+`msatdiag` or `python msatutil/msat_diagnostics_app.py`
 
-`mairls -h`
+## Convert L1B files to zarr
 
-**mairhtml** is a console entry point for generating static html plot of L3 mosaic files.
+The app can read L1B netcdf files, but for seemless interaction the netCDF are loaded upfront, taking ~20 GB of RAM and 2-3 minutes per file.
 
-It interfaces with [mair_geoviews.py](msatutil/mair_geoviews.py)
+To convert a L1B netcdf file to zarr run:
 
-Usage:
-
-`mairhtml in_path out_path`
-
-Check detailed usage info with
-
-`mairhtml -h`
-
-**in_path** can be the path to a directory or file, it accepts **gs://** paths
-
-The following directory structure is assumed when **in_path** is a directory:
-
-```
-in_path
-├── target_dir
-│   ├── resolution_dir
-│   │   └── mosaic_file.nc
-│   └── resolution_dir2
-│       └── mosaic_file.nc
-└── target_dir2
-    ├── resolution_dir
-    │   └── mosaic_file.nc
-    └── resolution_dir2
-        └── mosaic_file.nc
-```
-
-When **in_path** is a direct path to a file, **mairhtml** can be given the **--serve** argument to popup the plot with a local webserver (with live regridding)
-
-**in_path** can also be a **.csv** file with metadata on MethaneAIR files, in that case all the arguments of **mairls** can be used with **mairhtml** and the code will
-
-generate static maps for all the files matching the mairls arguments.
-
-Calling **mairhtml** with a **.csv** file and the **--show** argument won't generate plots, it is the same as calling **mairls**
-
-
-#### Other
-
-[generate_html_index.sh](msatutil/generate_html_index.sh) can be used to add index.html files under a directory structure
-
-It needs **[tree](https://linux.die.net/man/1/tree)** and is called with **mairhtml** when the **-i/--index** argument is given
-
-Usage:
-
-`sh generate_html_index.sh path_to_directory`
+`msatzarr input.nc output.zarr`
 
 
 #### Contact
