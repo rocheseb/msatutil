@@ -72,7 +72,7 @@ mairtargets = "msatutil.mair_targets:main"
 mairpolygons = "msatutil.mair_polygons:main"
 maircommands = "msatutil.mair_mosaic_plot_commands:main"
 msatdiag = "msatutil.msat_diagnostics_app:main"
-msat_zarr= "msatutil.msat_to_zarr:main"
+msatzarr= "msatutil.msat_to_zarr:main"
 
 [tool.setuptools_scm]
 write_to = "msatutil/_version.py"
