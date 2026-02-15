@@ -408,7 +408,7 @@ def plot_polygons(
         )
     )
     bokeh_plot = hv.render(plot, backend="bokeh")
-    bokeh_plot.sizing_mode = "scale_both"
+    bokeh_plot.sizing_mode = "stretch_both"
 
     poly_renderer = None
     for renderer in bokeh_plot.renderers:
@@ -949,7 +949,7 @@ def make_msat_targets_map(
             setTimeout(function() {
                 // this is to only keep the last tooltip when hovering over clumped points
                 // set the other tooltips display to none
-                var tooltips = window.document.querySelectorAll(".bk-Tooltip")[0]?.shadowRoot?.children[7]?.children[0]?.children;
+                var tooltips = window.document.querySelectorAll(".bk-Tooltip")[0]?.shadowRoot?.children[9]?.children[0]?.children;
                 
                 if (tooltips) {
                     for (let i = 0; i < tooltips.length - 1; i++) {
@@ -1342,7 +1342,7 @@ def make_msat_targets_map(
                     creation_time_div,
                 ),
             )
-            map.sizing_mode = "scale_both"
+            map.sizing_mode = "stretch_both"
             main_tab = TabPanel(child=map, title="Map")
             notes_tab = TabPanel(child=note_div, title="Information")
             layout = Tabs(tabs=[main_tab, notes_tab])
@@ -1394,7 +1394,7 @@ def make_msat_targets_map(
             ),
         )
 
-    layout.sizing_mode = "scale_both"
+    layout.sizing_mode = "stretch_both"
 
     if write:
         with open(outfile, "w") as out:
@@ -1484,7 +1484,7 @@ def make_msat_targets_map_tabs(
         ],
     )
 
-    layout.sizing_mode = "scale_both"
+    layout.sizing_mode = "stretch_both"
 
     with open(outfile, "w") as out:
         out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
