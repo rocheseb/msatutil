@@ -268,6 +268,7 @@ def save_static_plot_with_widgets(
     add numeric inputs for the first colorbar limits
     add an alpha slider
     add a colormap selector
+    add linked crosshairs
     save as an html file
 
     Inputs:
