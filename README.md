@@ -115,6 +115,8 @@ Launch the app with:
 
 The app can read L1B netcdf files, but for seemless interaction the netCDF are loaded upfront, taking ~20 GB of RAM and 2-3 minutes per file.
 
+For faster interactions and less memory usage the netCDF files can first be converted to ZARR with [msat_to_zarr](msatutil/msat_to_zarr.py).
+
 To convert a L1B netcdf file to zarr run:
 
 `msatzarr input.nc output.zarr`
