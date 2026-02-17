@@ -4,20 +4,16 @@ warnings.simplefilter("ignore")
 import os
 from functools import partial
 from threading import Thread
-from typing import Optional
 
-import dask.array as da
 import numpy as np
 import zarr
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 from bokeh.events import Tap
-from bokeh.io import output_file, output_notebook, show
 from bokeh.layouts import column, row
 from bokeh.models import (
     Button,
     CheckboxGroup,
-    ColorBar,
     ColumnDataSource,
     Div,
     InlineStyleSheet,
@@ -30,8 +26,7 @@ from bokeh.models import (
 from bokeh.palettes import Greys256
 from bokeh.plotting import figure
 from bokeh.server.server import Server
-from dask.diagnostics import ProgressBar
-from netCDF4 import Dataset, Variable
+from netCDF4 import Variable
 from tornado.ioloop import IOLoop
 
 from msatutil.msat_interface import msat_collection
@@ -43,12 +38,14 @@ class BaseBackend:
     def load(self):
         raise NotImplementedError
 
-    def get_mean_image(self):
+    def get_image(self):
         """Return 2D mean radiance image (rows, cols) as a NumPy array."""
         raise NotImplementedError
 
     def get_spectrum(self, i, j):
-        """Return (wvl, rad, flag) 1D arrays for a single pixel."""
+        """Return a dict of spectral variables for the sounding (i,j) clicked in the 2D image
+        Dict keys are ("rad","wvl","flag","residual") and values can be None if the variable is not present
+        """
         raise NotImplementedError
 
     @property
@@ -66,58 +63,113 @@ class NetcdfBackend(BaseBackend):
         self.doc = doc
         self.data = None  # dict of full NumPy arrays
         self._shape = None
+        self.level = None
 
     def load(self):
-        # Your existing MSAT loading logic, slightly factored
         with msat_collection([self.path], use_dask=False) as c:
-            if not c.is_l1:
-                raise RuntimeError("Only L1 reader implemented")
+            if c.is_l1:
+                self.level = 1
+                self.load_l1(c)
+            elif c.is_l2:
+                self.level = 2
+                self.load_l2(c)
+            else:
+                raise NotImplementedError("Only L1 and L2 readers implemented")
 
-            var_names = ["Band1/Radiance", "Band1/Wavelength", "Band1/RadianceFlag"]
-            cols = c.dim_size_map["xtrack"]
-            rows = c.dim_size_map["atrack"]
-            nspec = c.dim_size_map["spectral_channel"]
-            self._shape = (rows, cols, nspec)
+    def load_l1(self, c: msat_collection):
+        var_names = ["Band1/Radiance", "Band1/Wavelength", "Band1/RadianceFlag"]
+        cols = c.dim_size_map["xtrack"]
+        rows = c.dim_size_map["atrack"]
+        nspec = c.dim_size_map["spectral_channel"]
+        self._shape = (rows, cols, nspec)
 
-            self.data = {}
-            for idx, name in enumerate(var_names, start=1):
-                var = c.dsets[c.ids[0]][name]
+        self.data = {}
+        for idx, name in enumerate(var_names, start=1):
+            var = c.dsets[c.ids[0]][name]
 
-                def update_overall(i=idx, name=name, nvars=len(var_names)):
-                    self.progress_var.max = nvars
-                    self.progress_var.value = i
-                    self.progress_var.label = f"Reading variable {i}/{nvars}: {name}"
+            def update_overall(i=idx, name=name, nvars=len(var_names)):
+                self.progress_var.max = nvars
+                self.progress_var.value = i
+                self.progress_var.label = f"Reading variable {i}/{nvars}: {name}"
 
-                self.doc.add_next_tick_callback(update_overall)
+            self.doc.add_next_tick_callback(update_overall)
 
+            arr = read_var(var, progress=self.progress_chunk, doc=self.doc)
+            if isinstance(arr, np.ma.MaskedArray):
+                fill_value = 0 if "RadianceFlag" in name else np.nan
+                arr = arr.filled(fill_value)
+            self.data[name] = arr
+
+        # compute masked mean image just like before
+        rad = self.data["Band1/Radiance"].copy()
+        wvl = self.data["Band1/Wavelength"]
+        flag = self.data["Band1/RadianceFlag"]
+
+        sel = flag > 0
+        if self.wvl_range is not None:
+            wmin, wmax = self.wvl_range
+            sel |= (wvl < wmin) | (wvl > wmax)
+        rad[sel] = np.nan
+
+        mean_img = spectral_channel_mean(rad, doc=self.doc, progress=self.progress_chunk)
+        self.data["MeanRadiance"] = mean_img
+
+    def load_l2(self, c: msat_collection):
+        dset = c.dsets[c.ids[0]]
+        var_names = [
+            "Posteriori_RTM_Band1/Radiance_I",
+            "Posteriori_RTM_Band1/Wavelength",
+            "Posteriori_RTM_Band1/ResidualRadiance",
+            "OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr",
+        ]
+        cols = c.dim_size_map["xtrack"]
+        rows = c.dim_size_map["atrack"]
+        nspec = c.dim_size_map["spectral_channel"]
+        self._shape = (rows, cols, nspec)
+
+        self.data = {}
+        for idx, name in enumerate(var_names, start=1):
+            if not has_var(dset, name):
+                continue
+            var = dset[name]
+
+            def update_overall(i=idx, name=name, nvars=len(var_names)):
+                self.progress_var.max = nvars
+                self.progress_var.value = i
+                self.progress_var.label = f"Reading variable {i}/{nvars}: {name}"
+
+            self.doc.add_next_tick_callback(update_overall)
+
+            if len(var.dimensions) == 3:
                 arr = read_var(var, progress=self.progress_chunk, doc=self.doc)
-                if isinstance(arr, np.ma.MaskedArray):
-                    arr = arr.filled()
-                self.data[name] = arr
+            else:
+                arr = var[:]
+            if isinstance(arr, np.ma.MaskedArray):
+                arr = arr.filled(np.nan)
+            self.data[name] = arr
 
-            # compute masked mean image just like before
-            rad = self.data["Band1/Radiance"].copy()
-            wvl = self.data["Band1/Wavelength"]
-            flag = self.data["Band1/RadianceFlag"]
-
-            sel = flag > 0
-            if self.wvl_range is not None:
-                wmin, wmax = self.wvl_range
-                sel |= (wvl < wmin) | (wvl > wmax)
-            rad[sel] = np.nan
-
-            # chunked spectral mean using your helper for progress
-            mean_img = spectral_channel_mean(rad, doc=self.doc, progress=self.progress_chunk)
-            self.data["MeanRadiance"] = mean_img
-
-    def get_mean_image(self):
-        return self.data["MeanRadiance"]
+    def get_image(self):
+        if self.level == 1:
+            return self.data["MeanRadiance"]
+        elif self.level == 2:
+            return self.data["OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr"]
 
     def get_spectrum(self, i, j):
-        rad = self.data["Band1/Radiance"][i, j, :].copy()
-        wvl = self.data["Band1/Wavelength"][i, j, :]
-        flag = self.data["Band1/RadianceFlag"][i, j, :]
-        return wvl, rad, flag
+        """Return a dict of spectral variables for the sounding (i,j) clicked in the 2D image
+        Dict keys are ("rad","wvl","flag","residual") and values can be None if the variable is not present
+        """
+        spec_data = {k: None for k in ["rad", "wvl", "flag", "residual"]}
+        if self.level == 1:
+            spec_data["rad"] = self.data["Band1/Radiance"][i, j, :].copy()
+            spec_data["wvl"] = self.data["Band1/Wavelength"][i, j, :]
+            spec_data["flag"] = self.data["Band1/RadianceFlag"][i, j, :]
+        elif self.level == 2:
+            if "Posteriori_RTM_Band1/Radiance_I" in self.data:
+                spec_data["rad"] = self.data["Posteriori_RTM_Band1/Radiance_I"][i, j, :].copy()
+            if "Posteriori_RTM_Band1/Wavelength" in self.data:
+                spec_data["wvl"] = self.data["Posteriori_RTM_Band1/Wavelength"][i, j, :]
+            spec_data["residual"] = self.data["Posteriori_RTM_Band1/ResidualRadiance"][i, j, :]
+        return spec_data
 
     @property
     def shape(self):
@@ -131,29 +183,69 @@ class ZarrBackend(BaseBackend):
         self.rad = None
         self.wvl = None
         self.flag = None
-        self.mean = None
+        self.image = None
+        self.residual = None
+        self.level = None
 
     def load(self):
         self.store = zarr.open_group(self.path, mode="r")
+        if "_L1B_" in self.path:
+            self.level = 1
+            self.load_l1()
+        elif "_L2_" in self.path:
+            self.level = 2
+            self.load_l2()
+        else:
+            raise NotImplementedError("Only L1B and L2 readers implemented")
+
+    def load_l1(self):
         self.rad = self.store["Band1/Radiance"]
         self.wvl = self.store["Band1/Wavelength"]
         self.flag = self.store["Band1/RadianceFlag"]
-        self.mean = self.store["MeanRadiance"]
+        self.image = self.store["MeanRadiance"]
 
-    def get_mean_image(self):
-        return self.mean[:]  # 2D (rows, cols)
+    def load_l2(self):
+        if has_var(self.store, "Posteriori_RTM_Band1/Radiance_I"):
+            self.rad = self.store["Posteriori_RTM_Band1/Radiance_I"]
+        else:
+            self.rad = None
+        if has_var(self.store, "Posteriori_RTM_Band1/Wavelength"):
+            self.wvl = self.store["Posteriori_RTM_Band1/Wavelength"]
+        else:
+            self.wvl = None
+        self.residual = self.store["Posteriori_RTM_Band1/ResidualRadiance"]
+        self.image = self.store["OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr"]
+
+    def get_image(self):
+        return self.image[:]  # 2D (rows, cols)
 
     def get_spectrum(self, i, j):
-        # 1D slices; small and fast
-        rad = self.rad[i, j, :].astype("float32")
-        wvl = self.wvl[i, j, :].astype("float32")
-        flag = self.flag[i, j, :]
-        return wvl, rad, flag
+        """Return a dict of spectral variables for the sounding (i,j) clicked in the 2D image
+        Dict keys are ("rad","wvl","flag","residual") and values can be None if the variable is not present
+        """
+        spec_data = {k: None for k in ["rad", "wvl", "flag", "residual"]}
+        if self.rad is not None:
+            spec_data["rad"] = self.rad[i, j, :]
+        if self.wvl is not None:
+            spec_data["wvl"] = self.wvl[i, j, :]
+        if self.flag is not None:
+            spec_data["flag"] = self.flag[i, j, :]
+        if self.residual is not None:
+            spec_data["residual"] = self.residual[i, j, :]
+        return spec_data
 
     @property
     def shape(self):
-        rows, cols, nspec = self.rad.shape
+        rows, cols, nspec = self.rad.shape if self.level == 1 else self.residual.shape
         return rows, cols, nspec
+
+
+def has_var(dset, var):
+    try:
+        _ = dset[var]
+        return True
+    except (KeyError, IndexError):
+        return False
 
 
 def infer_wvl_range_from_name(name: str):
@@ -384,8 +476,7 @@ def bk_app(doc):
 
         doc.add_next_tick_callback(show_bars_for_read)
 
-        # do the heavy I/O
-        backend.load()
+        backend.load()  # Load data arrays
 
         rows, cols, nspec = backend.shape
         spec_zeros = np.zeros(nspec)
@@ -393,7 +484,7 @@ def bk_app(doc):
         if is_input_a:
 
             def update_models_from_A():
-                mean_img = backend.get_mean_image()
+                mean_img = backend.get_image()
                 color_mapper.low = np.nanmin(mean_img)
                 color_mapper.high = np.nanmax(mean_img)
 
@@ -569,8 +660,8 @@ def bk_app(doc):
 
     doc.add_root(
         column(
-            row(intro_div,inputs),
-            row(boxes,status_div),
+            row(intro_div, inputs),
+            row(boxes, status_div),
             progress_var,
             progress_chunk,
             p1,
