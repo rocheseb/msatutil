@@ -55,6 +55,8 @@ def msat_netcdf_to_zarr(input_path: str, output_store: str, overwrite: bool = Fa
     elif "_L2_" in input_path:
         var_names = [
             "Posteriori_RTM_Band1/ResidualRadiance",
+            "Posteriori_RTM_Band1/Radiance_I",
+            "Posteriori_RTM_Band1/Wavelength",
             "OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr",  # prior albedo
         ]
     else:
@@ -186,6 +188,8 @@ def convert_netcdf_to_zarr(
             s = slice(ichunk, iend)
 
             for v in zarr_dict:
+                if v == "MeanRadiance":
+                    continue
                 dim_map = c.get_dim_map(v)
                 slices = [slice(None) for i in dim_map]
                 slices[dim_map["atrack"]] = s
