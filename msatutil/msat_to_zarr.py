@@ -18,12 +18,19 @@ python msat_to_zarr.py input.nc output.zarr
 
 import argparse
 import os
+import shutil
 import sys
 
 import numpy as np
+import warnings
 import zarr
 
 from msatutil.msat_interface import msat_collection
+
+warnings.simplefilter("ignore")
+
+CHUNKS_3D = (50, 50, 2048)  # (atrack, xtrack, spectral)
+CHUNKS_2D = (64, 256)  # (atrack, xtrack)
 
 
 def infer_wvl_range_from_name(name: str):
@@ -40,70 +47,140 @@ def infer_wvl_range_from_name(name: str):
 def convert_to_zarr(input_path: str, output_store: str, overwrite: bool = False):
     if "_L1B_" in input_path:
         convert_L1B_to_zarr(input_path, output_store, overwrite)
+    elif "_L2_" in input_path:
+        convert_L2_to_zarr(input_path, output_store, overwrite)
     else:
-        raise NotImplementedError("Zarr conversion only implemented for L1B files")
+        raise NotImplementedError("Zarr conversion only implemented for L1B and L2 files")
 
 
-def convert_L1B_to_zarr(input_path: str, output_store: str, overwrite: bool = False):
+def check_inputs(input_path, output_store, overwrite: bool = False):
     if not os.path.exists(input_path):
-        print(f"ERROR: input file does not exist: {input_path}", file=sys.stderr)
-        sys.exit(1)
-
+        raise ValueError(f"ERROR: input file does not exist: {input_path}")
     if os.path.exists(output_store):
         if not overwrite:
-            print(
+            raise ValueError(
                 f"ERROR: output store exists: {output_store} (use --overwrite to replace)",
-                file=sys.stderr,
             )
-            sys.exit(1)
         else:
             print(f"Removing existing Zarr store: {output_store}")
-            import shutil
-
             shutil.rmtree(output_store)
 
-    with msat_collection([input_path], use_dask=False) as c:
-        if not c.is_l1:
-            print("ERROR: only L1 reader implemented", file=sys.stderr)
-            sys.exit(1)
 
-        var_names = ["Band1/Radiance", "Band1/Wavelength", "Band1/RadianceFlag"]
+def convert_L2_to_zarr(input_path: str, output_store: str, overwrite: bool = False):
+
+    check_inputs(input_path, output_store, overwrite)
+
+    zroot = zarr.open_group(output_store, mode="w")
+    compressor = zarr.codecs.Blosc(cname="zstd", clevel=5, shuffle=1)
+
+    var_names = [
+        "Posteriori_RTM_Band1/ResidualRadiance",
+        "Posteriori_RTM_Band1/Wavelength",
+        "Posteriori_RTM_Band1/Radiance_I",
+        "OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr",  # prior albedo
+    ]
+
+    with msat_collection([input_path], use_dask=False) as c:
+        if not c.is_L2:
+            raise Exception("Expected a L2 file")
+        dset = c.dsets[c.ids[0]]
 
         cols = c.dim_size_map["xtrack"]
         rows = c.dim_size_map["atrack"]
         nspec = c.dim_size_map["spectral_channel"]
 
-        print(f"Detected shape: (atrack, xtrack, spectral) = ({rows}, {cols}, {nspec})")
+        print(f"Dimensions: (atrack, xtrack, spectral) = ({rows}, {cols}, {nspec})")
+
+        fname = c.file_names[0]
+        wvl_range = infer_wvl_range_from_name(fname)
+
+        zarr_dict = {}
+
+        for v in var_names:
+            try:
+                _ = dset[v]
+            except (IndexError, KeyError):
+                print(f"Variable {v} not in file")
+                continue
+
+            if len(dset[v].dimensions) == 2:
+                chunks = CHUNKS_2D
+                shape = (rows, cols, nspec)
+            else:
+                chunks = CHUNKS_3D
+                shape = (rows, cols)
+
+            zarr_dict[v] = zroot.create_array(
+                v,
+                shape=shape,
+                chunks=chunks,
+                dtype=dset[v].dtype,
+                compressors=[compressor],
+            )
+
+        atrack_chunk = 20
+        print("Starting read & conversion...")
+        ichunk = 0
+        while ichunk < rows:
+            iend = min(ichunk + atrack_chunk, rows)
+            print(f"  Processing rows {ichunk}:{iend} ...")
+
+            s = slice(ichunk, iend)
+
+            for v in var_names:
+                var_chunked = dset[v][s]
+                if isinstance(var_chunked, np.ma.MaskedArray):
+                    var_chunked = var_chunked.filled(np.nan)
+                zarr_dict[v][s, :] = var_chunked
+
+            ichunk = iend
+
+        zroot.attrs["source_file"] = os.path.abspath(input_path)
+        zroot.attrs["rows"] = rows
+        zroot.attrs["cols"] = cols
+        zroot.attrs["spectral_channels"] = nspec
+        zroot.attrs["wavelength_range"] = wvl_range
+
+
+def convert_L1B_to_zarr(input_path: str, output_store: str, overwrite: bool = False):
+
+    check_inputs(input_path, output_store, overwrite)
+
+    with msat_collection([input_path], use_dask=False) as c:
+        if not c.is_l1:
+            raise Exception("Expected a L1B file")
+
+        cols = c.dim_size_map["xtrack"]
+        rows = c.dim_size_map["atrack"]
+        nspec = c.dim_size_map["spectral_channel"]
+
+        print(f"Dimensions: (atrack, xtrack, spectral) = ({rows}, {cols}, {nspec})")
 
         fname = c.file_names[0]
         wvl_range = infer_wvl_range_from_name(fname)
 
         # Create Zarr group and datasets
         zroot = zarr.open_group(output_store, mode="w")
-
-        chunks_3d = (50, 50, nspec)  # (atrack, xtrack, spectral)
-        chunks_2d = (64, 256)  # for mean image, not critical
-
         compressor = zarr.codecs.Blosc(cname="zstd", clevel=5, shuffle=1)
 
         rad_z = zroot.create_array(
             "Band1/Radiance",
             shape=(rows, cols, nspec),
-            chunks=chunks_3d,
+            chunks=CHUNKS_3D,
             dtype=c.dsets[c.ids[0]]["Band1/Radiance"].dtype,
             compressors=[compressor],
         )
         wvl_z = zroot.create_array(
             "Band1/Wavelength",
             shape=(rows, cols, nspec),
-            chunks=chunks_3d,
+            chunks=CHUNKS_3D,
             dtype=c.dsets[c.ids[0]]["Band1/Wavelength"].dtype,
             compressors=[compressor],
         )
         flag_z = zroot.create_array(
             "Band1/RadianceFlag",
             shape=(rows, cols, nspec),
-            chunks=chunks_3d,
+            chunks=CHUNKS_3D,
             dtype=c.dsets[c.ids[0]]["Band1/RadianceFlag"].dtype,
             compressors=[compressor],
         )
@@ -112,7 +189,7 @@ def convert_L1B_to_zarr(input_path: str, output_store: str, overwrite: bool = Fa
         mean_z = zroot.create_array(
             "MeanRadiance",
             shape=(rows, cols),
-            chunks=chunks_2d,
+            chunks=CHUNKS_2D,
             dtype=np.float32,
             compressors=[compressor],
         )
