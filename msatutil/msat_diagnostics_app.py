@@ -14,13 +14,15 @@ from bokeh.layouts import column, row
 from bokeh.models import (
     Button,
     CheckboxGroup,
-    RadioGroup,
     ColumnDataSource,
+    CustomJSHover,
     Div,
+    HoverTool,
     InlineStyleSheet,
     LinearAxis,
     LinearColorMapper,
     Progress,
+    RadioGroup,
     Range1d,
     TextInput,
 )
@@ -150,9 +152,9 @@ class NetcdfBackend(BaseBackend):
 
     def get_image(self):
         if self.level == 1:
-            return self.data["MeanRadiance"]
+            return self.data["MeanRadiance"][:].copy()
         elif self.level == 2:
-            return self.data["albedo"]
+            return self.data["albedo"][:].copy()
 
     def get_spectral_data(self, i, j):
         """Return a dict of spectral variables for the sounding (i,j) clicked in the 2D image
@@ -161,13 +163,13 @@ class NetcdfBackend(BaseBackend):
         spec_data = {k: None for k in ["rad", "wvl", "flag", "residual"]}
         if self.level == 1:
             spec_data["rad"] = self.data["rad"][i, j, :].copy()
-            spec_data["wvl"] = self.data["wvl"][i, j, :]
-            spec_data["flag"] = self.data["flag"][i, j, :]
+            spec_data["wvl"] = self.data["wvl"][i, j, :].copy()
+            spec_data["flag"] = self.data["flag"][i, j, :].copy()
         elif self.level == 2:
             if "rad" in self.data:
                 spec_data["rad"] = self.data["rad"][i, j, :].copy()
             if "wvl" in self.data:
-                spec_data["wvl"] = self.data["wvl"][i, j, :]
+                spec_data["wvl"] = self.data["wvl"][i, j, :].copy()
             spec_data["residual"] = self.data["residual"][i, j, :].copy()
         return spec_data
 
@@ -210,7 +212,7 @@ class ZarrBackend(BaseBackend):
         self.image = self.store["OptProp_Band1/RefWvl_BRDF_KernelAmplitude_isotr"]
 
     def get_image(self):
-        return self.image[:]  # 2D (rows, cols)
+        return self.image[:].copy()  # 2D (rows, cols)
 
     def get_spectral_data(self, i, j):
         """Return a dict of spectral variables for the sounding (i,j) clicked in the 2D image
@@ -220,9 +222,9 @@ class ZarrBackend(BaseBackend):
         if self.data["rad"] is not None:
             spec_data["rad"] = self.data["rad"][i, j, :].copy()
         if self.data["wvl"] is not None:
-            spec_data["wvl"] = self.data["wvl"][i, j, :]
+            spec_data["wvl"] = self.data["wvl"][i, j, :].copy()
         if self.data["flag"] is not None:
-            spec_data["flag"] = self.data["flag"][i, j, :]
+            spec_data["flag"] = self.data["flag"][i, j, :].copy()
         if self.data["residual"] is not None:
             spec_data["residual"] = self.data["residual"][i, j, :].copy()
         return spec_data
@@ -410,12 +412,29 @@ def bk_app(doc):
         title="Mean Radiance (Click a Pixel)",
         height=300,
         sizing_mode="stretch_width",
-        x_range=(0, 2048),
-        y_range=(0, 500),
-        tools="tap,pan,wheel_zoom,reset",
+        tools="pan,box_zoom,wheel_zoom,reset",
         y_axis_label="along-track index",
         x_axis_label="across-track index",
         min_border_left=100,
+    )
+    floor_formatter = CustomJSHover(code="return Math.floor(value).toString();")
+
+    hover = HoverTool(
+        tooltips=[
+            ("along-track", "$x{custom}"),
+            ("across-track", "$y{custom}"),
+            ("Value", "@image{0.3e}"),
+        ],
+        formatters={"$x": floor_formatter, "$y": floor_formatter},
+    )
+    p1.add_tools(hover)
+
+    image_renderer = p1.image(
+        image="image",
+        x=0,
+        y=0,
+        source=img_source,
+        color_mapper=color_mapper,
     )
 
     # Display the spectral data of the pixel selected from p1
@@ -556,7 +575,7 @@ def bk_app(doc):
         if is_input_a:
 
             def update_models_from_A():
-                img = backend.get_image()
+                img = backend.get_image().copy()
                 color_mapper.low = np.nanmin(img)
                 color_mapper.high = np.nanmax(img)
 
@@ -570,6 +589,8 @@ def bk_app(doc):
                 p1.y_range.start = 0
                 p1.y_range.end = rows
                 p1.y_range.bounds = (0, rows)
+                image_renderer.glyph.dw = cols
+                image_renderer.glyph.dh = rows
 
             doc.add_next_tick_callback(update_models_from_A)
         else:
@@ -595,16 +616,6 @@ def bk_app(doc):
     marker_source = ColumnDataSource(data=dict(x=[], y=[]))
     # currently selected pixel indices
     pixel_source = ColumnDataSource(data=dict(i=[], j=[]))
-
-    p1.image(
-        image="image",
-        x=0,
-        y=0,
-        dw=p1.x_range.end,
-        dh=p1.y_range.end,
-        source=img_source,
-        color_mapper=color_mapper,
-    )
 
     p1.scatter(
         "x",
@@ -644,18 +655,20 @@ def bk_app(doc):
         data_a = backendA.get_spectral_data(i, j)
         wvl_a, flag_a = data_a["wvl"], data_a["flag"]
         if backendA.level == 1:
-            rad_a = data_a["rad"]
+            rad_a = data_a["rad"].copy()
         elif backendA.level == 2:
-            rad_a = data_a["residual"] if l2_selection.active == 0 else data_a["rad"]
+            rad_a = data_a["residual"].copy() if l2_selection.active == 0 else data_a["rad"].copy()
         selection_a = np.zeros_like(rad_a, dtype=bool)
 
         if B_loaded:
             data_b = backendB.get_spectral_data(i, j)
             wvl_b, flag_b = data_b["wvl"], data_b["flag"]
             if backendA.level == 1:
-                rad_b = data_b["rad"]
+                rad_b = data_b["rad"].copy()
             elif backendA.level == 2:
-                rad_b = data_b["residual"] if l2_selection.active == 0 else data_b["rad"]
+                rad_b = (
+                    data_b["residual"].copy() if l2_selection.active == 0 else data_b["rad"].copy()
+                )
             selection_b = np.zeros_like(rad_b, dtype=bool)
 
         # Show full spectral dimension?
