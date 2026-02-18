@@ -423,9 +423,9 @@ def bk_app(doc):
         tooltips=[
             ("along-track", "$x{custom}"),
             ("across-track", "$y{custom}"),
-            ("Value", "@image{0.3e}"),
+            ("Value", "@image{%0.3e}"),
         ],
-        formatters={"$x": floor_formatter, "$y": floor_formatter},
+        formatters={"$x": floor_formatter, "$y": floor_formatter, "@image": "printf"},
     )
     p1.add_tools(hover)
 
