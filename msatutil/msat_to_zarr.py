@@ -45,14 +45,14 @@ def infer_wvl_range_from_name(name: str):
         return None
 
 
-def msat_netcdf_to_zarr(input_path: str, output_store: str, overwrite: bool = False):
-    if "_L1B_" in input_path:
+def msat_netcdf_to_zarr(input_file: str, output_dir: str = "", overwrite: bool = False):
+    if "_L1B_" in input_file:
         var_names = [
             "Band1/Radiance",
             "Band1/Wavelength",
             "Band1/RadianceFlag",
         ]
-    elif "_L2_" in input_path:
+    elif "_L2_" in input_file:
         var_names = [
             "Posteriori_RTM_Band1/ResidualRadiance",
             "Posteriori_RTM_Band1/Radiance_I",
@@ -62,12 +62,15 @@ def msat_netcdf_to_zarr(input_path: str, output_store: str, overwrite: bool = Fa
     else:
         raise NotImplementedError("Zarr conversion only implemented for L1B and L2 files")
 
-    convert_netcdf_to_zarr(input_path, output_store, var_names, overwrite)
+    zarr_name = os.path.basename(input_file).replace(".nc", ".zarr")
+    output_store = os.path.join(output_dir, zarr_name)
+
+    convert_netcdf_to_zarr(input_file, output_store, var_names, overwrite)
 
 
-def check_inputs(input_path, output_store, overwrite: bool = False):
-    if not os.path.exists(input_path):
-        raise ValueError(f"ERROR: input file does not exist: {input_path}")
+def check_inputs(input_file, output_store, overwrite: bool = False):
+    if not os.path.exists(input_file):
+        raise ValueError(f"ERROR: input file does not exist: {input_file}")
     if os.path.exists(output_store):
         if not overwrite:
             raise ValueError(
@@ -136,17 +139,17 @@ def compute_mean_radiance(
 
 
 def convert_netcdf_to_zarr(
-    input_path: str,
+    input_file: str,
     output_store: str,
     var_names: list[str],
     overwrite: bool = False,
 ):
-    check_inputs(input_path, output_store, overwrite)
+    check_inputs(input_file, output_store, overwrite)
 
     zarr_root = zarr.open_group(output_store, mode="w")
     compressor = zarr.codecs.Blosc(cname="zstd", clevel=5, shuffle=1)
 
-    with msat_collection([input_path], use_dask=False) as c:
+    with msat_collection([input_file], use_dask=False) as c:
         if not (c.is_l2 or c.is_l1):
             raise Exception("Expected a L1B or L2 file")
         dset = c.dsets[c.ids[0]]
@@ -214,7 +217,7 @@ def convert_netcdf_to_zarr(
 
             ichunk = iend
 
-        zarr_root.attrs["source_file"] = os.path.abspath(input_path)
+        zarr_root.attrs["source_file"] = os.path.abspath(input_file)
         zarr_root.attrs["nrow"] = nrow
         zarr_root.attrs["ncol"] = ncol
         zarr_root.attrs["spectral_channels"] = nspec
@@ -223,8 +226,12 @@ def convert_netcdf_to_zarr(
 
 def main():
     parser = argparse.ArgumentParser(description="Convert a MSAT L1B netCDF file to a Zarr store.")
-    parser.add_argument("input", help="Path to input MSAT file")
-    parser.add_argument("output", help="Path to output Zarr directory (e.g., file.zarr)")
+    parser.add_argument("input_file", help="Path to input MSAT netcdf file")
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help="Path to output directory under which the zarr data will be saved, if not given, save in current directory",
+    )
     parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -232,7 +239,7 @@ def main():
     )
     args = parser.parse_args()
 
-    msat_netcdf_to_zarr(args.input, args.output, overwrite=args.overwrite)
+    msat_netcdf_to_zarr(args.input_file, args.output_dir, overwrite=args.overwrite)
 
 
 if __name__ == "__main__":

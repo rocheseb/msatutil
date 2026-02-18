@@ -101,26 +101,35 @@ Or using the **mairhtml** console script with a direct file path and the **--ser
 
 `jupyter notebook msatutil/notebooks/mair_geoviews.ipynb`
 
-# Bokeh application for L1B spectra
+# Bokeh application for L1B and L2 spectral variables
 
-[msat_diagnostics_app](msatutil/msat_diagnostics_app.py) is a bokeh application that launch a local webserver to interface with L1B files.
+[msat_diagnostics_app](msatutil/msat_diagnostics_app.py) is a bokeh application that launch a local webserver to interface with L1B or L2 files.
 
 It has a 2D map of the given target, and the spectrum of the clicked sounding is displayed in another plot.
+
+When loading L1B files it displays radiance, when loading L2 files it can display the posteriori (fitted) radiance or the fit residua
 
 Launch the app with:
 
 `msatdiag` or `python msatutil/msat_diagnostics_app.py`
 
-## Convert L1B files to zarr
+## Convert L1B / L2 files to zarr
 
-The app can read L1B netcdf files, but for seemless interaction the netCDF are loaded upfront, taking ~20 GB of RAM and 2-3 minutes per file.
+The app can read L1B / L2 netcdf files, but for seemless interaction the netCDF are loaded upfront, taking ~20 GB of RAM and 2-3 minutes per L1B.
 
 For faster interactions and less memory usage the netCDF files can first be converted to ZARR with [msat_to_zarr](msatutil/msat_to_zarr.py).
 
-To convert a L1B netcdf file to zarr run:
+To convert a L1B / L2 netcdf file to zarr run:
 
-`msatzarr input.nc output.zarr`
+`msatzarr input.nc`
 
+The output zarr file will be saved as `input.zarr` under the working directory.
+
+OR using **--output-dir** 
+
+`msatzarr /path/to/input.nc --output-dir /path/to/outdir`
+
+The output zarr file will be saved as `input.zarr` under the given output directory.
 
 #### Contact
 
