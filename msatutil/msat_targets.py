@@ -293,10 +293,12 @@ def get_target_dict_from_file_list(
         t = int(i.parts[tindex].strip("t"))
         c = i.parts[cindex].strip("c")
         if is_L0:
-            try:
-                p = int(re.search(r"(?i)po[-_](\d{4})", i.parts[pindex]).group(1))
-            except Exception:
-                continue
+            p = i.parts[pindex]
+            if p != "v1":
+                try:
+                    p = int(re.search(r"(?i)po[-_](\d{4})", p).group(1))
+                except Exception:
+                    continue
         else:
             p = int(i.parts[pindex].strip("p"))
         if t not in d:
@@ -307,7 +309,11 @@ def get_target_dict_from_file_list(
         # if a processing exists, overwrite with the higher pid
         if d[t][c] != {}:
             old_p = list(d[t][c].keys())[0]
-            if p < old_p:
+            if is_L0 and old_p == "v1":
+                continue
+            elif is_L0 and p == "v1":
+                pass
+            elif p < old_p:
                 continue
             elif p == old_p and "interim" not in i.name:
                 # for L4 files, keep the interim run if it exists
