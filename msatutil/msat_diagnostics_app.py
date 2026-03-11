@@ -421,8 +421,8 @@ def bk_app(doc):
 
     hover = HoverTool(
         tooltips=[
-            ("along-track", "$x{custom}"),
-            ("across-track", "$y{custom}"),
+            ("across-track", "$x{custom}"),
+            ("along-track", "$y{custom}"),
             ("Value", "@image{%0.3e}"),
         ],
         formatters={"$x": floor_formatter, "$y": floor_formatter, "@image": "printf"},
