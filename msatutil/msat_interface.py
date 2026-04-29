@@ -1065,9 +1065,6 @@ class msat_collection:
         rounding_factor (int): use for rounding the starting lat/lon label, 2 is nearest .5
         kwargs: passed to the pcolormesh call
         """
-        vmin = kwargs.get("vmin")
-        vmax = kwargs.get("vmax")
-
         if lon_extent is not None:
             lon_min, lon_max = lon_extent
         else:
