@@ -23,8 +23,6 @@ from dask.diagnostics import ProgressBar
 from matplotlib.collections import PolyCollection
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 from pyproj import Transformer
-from scipy.interpolate import griddata
-from scipy.spatial import Delaunay
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
