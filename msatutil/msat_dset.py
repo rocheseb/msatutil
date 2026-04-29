@@ -84,3 +84,22 @@ def gs_list(gs_path: str, srchstr=None) -> list:
         srchstr = srchstr.replace("*", "(.*?)")
         flist = [i for i in flist if re.match(srchstr, os.path.basename(i.name))]
     return [f"gs://{bucket_name}/{i.name}" for i in flist]
+
+
+def gs_file_exists(gs_path: str) -> bool:
+    """
+    Check if a file exists in GCS.
+    
+    Args:
+        gs_path: Full GCS path, e.g. gs://bucket-name/path/to/file.txt
+    
+    Returns:
+        True if file exists, False otherwise
+    """
+    path = gs_path.removeprefix("gs://")
+    bucket_name, blob_name = path.split("/", 1)
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    return blob.exists()

@@ -7,7 +7,7 @@ import dask.array as da
 import netCDF4 as ncdf
 import numpy as np
 
-from msatutil.msat_dset import msat_dset
+from msatutil.msat_dset import msat_dset, gs_file_exists
 
 
 class MSATError(Exception):
@@ -24,8 +24,7 @@ class msat_nc:
         self.use_dask = use_dask
 
         if infile.startswith("gs://"):
-            # will need to figure out how to determine a gs path exists and then update this
-            self.exists = True
+            self.exists = gs_file_exists(infile)
         else:
             self.exists = os.path.exists(infile)
         if not self.exists:
