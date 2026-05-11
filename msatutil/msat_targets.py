@@ -185,6 +185,7 @@ def get_target_dict_from_stac(
     limit: int = 5000,
     max_flagged_fraction: float = 1,
     asset_key: Optional[str] = None,
+    images: bool = False,
     **kwargs,
 ) -> dict:
     """
@@ -196,18 +197,28 @@ def get_target_dict_from_stac(
         limit(int): maximum number of items returned by the collection search
         max_flagged_fraction (float): only includes collections that have less than this flag fraction
         asset_key (Optional[str]): the stac asset name to use (defaults to the netcdf data file)
+        images (bool): if True, change the default asset_dict
     Outputs:
         d (dict): dictionary of collections only retaining the highest processing ID for each collection
     """
     items = [i for i in stac_catalog.search(collections=[stac_collection], limit=limit).items()]
 
-    asset_dict = {
-        "MethaneSAT_Level1b": "ch4",
-        "MethaneSAT_Level2_post": "post_product",
-        "MethaneSAT_Level3_regrid": "regrid",
-        "MethaneSAT_Level4_area": "analysis",
-        "MethaneSAT_Level4_area_twostep": "analysis",
-    }
+    if images:
+        asset_dict = {
+            "MethaneSAT_Level1b": "ch4_l1b_preview",
+            "MethaneSAT_Level2_post": "qaqc_quicklook_image",
+            "MethaneSAT_Level3_regrid": "quicklook_image",
+            "MethaneSAT_Level4_area": "quicklook_image",
+            "MethaneSAT_Level4_area_twostep": "quicklook_image",
+        }
+    else:
+        asset_dict = {
+            "MethaneSAT_Level1b": "ch4",
+            "MethaneSAT_Level2_post": "post_product",
+            "MethaneSAT_Level3_regrid": "regrid",
+            "MethaneSAT_Level4_area": "analysis",
+            "MethaneSAT_Level4_area_twostep": "analysis",
+        }        
 
     L2_flagged_fraction_dict = {}
     L2_pid_dict = {}
@@ -501,12 +512,12 @@ def make_msat_targets_map(
         map_tools += ["box_select"]
         if public:
             td = get_target_dict_from_images(file_list, public_bucket)
-        elif stac_catalog:
+        elif file_list is not None:  # prioritize file_list if given when also giving a stac address
+            td = get_target_dict_from_file_list(file_list)
+        elif stac_catalog is not None:
             td = get_target_dict_from_stac(
                 stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
             )
-        else:
-            td = get_target_dict_from_file_list(file_list)
         first_path = list(next(iter(next(iter(td.values())).values())).values())[0]
         is_L2 = "_L2_" in first_path
         is_L4 = "_L4_" in first_path
@@ -532,7 +543,9 @@ def make_msat_targets_map(
             gdf["html_files"] = ""
             vdims += ["html_files"]
             scatter_df_columns += ["html_file"]
-            if is_L2 and stac_catalog:
+            if is_L2 and file_list is not None:
+                html_td = get_target_dict_from_file_list(file_list, derive_L2_html_path)
+            elif is_L2 and stac_catalog:
                 html_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
@@ -540,8 +553,10 @@ def make_msat_targets_map(
                     max_flagged_fraction=max_flagged_fraction,
                     func=gs_posixpath_to_auth_url,
                 )
-            elif is_L2:
-                html_td = get_target_dict_from_file_list(file_list, derive_L2_html_path)
+            elif is_L4 and file_list is not None:
+                html_td = get_target_dict_from_file_list(
+                    file_list, derive_L4_html_path, html_bucket=html_bucket
+                )
             elif is_L4 and stac_catalog:
                 html_td = get_target_dict_from_stac(
                     stac_catalog,
@@ -550,40 +565,36 @@ def make_msat_targets_map(
                     max_flagged_fraction=max_flagged_fraction,
                     html_bucket=html_bucket,
                 )
-            elif is_L4:
-                html_td = get_target_dict_from_file_list(
-                    file_list, derive_L4_html_path, html_bucket=html_bucket
-                )
         if image_bucket is not None:
             gdf["image_gs_files"] = ""
             vdims += ["image_gs_files"]
             scatter_df_columns += ["image_gs_file"]
-            if stac_catalog:
+            if file_list is not None:
+                image_td = get_target_dict_from_file_list(
+                    file_list, derive_image_path, image_bucket=image_bucket
+                )
+            elif stac_catalog is not None:
                 image_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
-                    derive_image_path,
+                    gs_posixpath_to_auth_url,
                     max_flagged_fraction=max_flagged_fraction,
-                    image_bucket=image_bucket,
-                )
-            else:
-                image_td = get_target_dict_from_file_list(
-                    file_list, derive_image_path, image_bucket=image_bucket
+                    images=True,
                 )
         if google_drive_id is not None:
             gdf["image_gdrive_files"] = ""
             vdims += ["image_gdrive_files"]
             scatter_df_columns += ["image_gdrive_file"]
-            if stac_catalog:
-                gdrive_td = get_target_dict_from_stac(
-                    stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
-                )
-            else:
+            if file_list is not None:
                 gdrive_td = get_target_dict_from_file_list(
                     file_list,
                     derive_image_drive_link,
                     service_account_file=service_account_file,
                     google_drive_id=google_drive_id,
+                )
+            elif stac_catalog is not None:
+                gdrive_td = get_target_dict_from_stac(
+                    stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
                 )
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
         # a collection ID has 8 characters
