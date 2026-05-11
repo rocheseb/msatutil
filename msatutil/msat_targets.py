@@ -291,16 +291,18 @@ def get_target_dict_from_stac(
 
     d = {}
     for it in items:
+        collection_name = it.collection_id
         t = int(it.properties["target_id"])
         c = it.properties["collection_id"]
         p = it.properties["processing_id"]
-        v = it.properties["processor_version"]
+        v = it.properties.get("processor_version")
+        if v is None:
+            v = extract_version(it.assets[asset_dict[collection_name]].href)
         if min_version is not None and not is_version_higher(v, min_version):
             continue
         if L2_flagged_fraction_dict.get(c, 1) > max_flagged_fraction:
             continue
         two_step_core = it.properties.get("two_step_core", False)
-        collection_name = it.collection_id
         asset = Path(it.assets[asset_key if asset_key else asset_dict[collection_name]].href)
         if t not in d:
             d[t] = {}
