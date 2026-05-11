@@ -705,7 +705,7 @@ def make_msat_targets_map(
                 gdf.loc[gdf["id"] == t, "html_files"] = "\n".join(
                     [html_td[t][c][p] for c in td[t] for p in td[t][c]]
                 )
-            if image_bucket is not None:
+            if image_bucket is not None or stac_collection is not None:
                 gdf.loc[gdf["id"] == t, "image_gs_files"] = "\n".join(
                     [image_td[t][c][p] for c in td[t] for p in td[t][c]]
                 )
@@ -724,7 +724,7 @@ def make_msat_targets_map(
                     )
                     if do_html:
                         columns += [html_td[t][c][p]]
-                    if image_bucket is not None:
+                    if image_bucket is not None or stac_collection is not None:
                         columns += [image_td[t][c][p]]
                     if google_drive_id is not None:
                         columns += [gdrive_td[t][c][p] or ""]
@@ -890,7 +890,7 @@ def make_msat_targets_map(
         file_type_select_options = ["Data"]
         if do_html:
             file_type_select_options += ["HTML Plots"]
-        if image_bucket is not None:
+        if image_bucket is not None or stac_collection is not None:
             file_type_select_options += ["Images (gs)"]
         if google_drive_id is not None:
             file_type_select_options += ["Images (gdrive)"]
