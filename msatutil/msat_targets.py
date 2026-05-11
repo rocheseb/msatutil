@@ -250,6 +250,13 @@ def get_target_dict_from_stac(
     """
     items = [i for i in stac_catalog.search(collections=[stac_collection], limit=limit).items()]
 
+    main_asset_dict = {
+        "MethaneSAT_Level1b": "ch4",
+        "MethaneSAT_Level2_post": "post_product",
+        "MethaneSAT_Level3_regrid": "regrid",
+        "MethaneSAT_Level4_area": "analysis",
+        "MethaneSAT_Level4_area_twostep": "analysis",
+    }
     if images:
         asset_dict = {
             "MethaneSAT_Level1b": "ch4_l1b_preview",
@@ -259,13 +266,7 @@ def get_target_dict_from_stac(
             "MethaneSAT_Level4_area_twostep": "quicklook_image",
         }
     else:
-        asset_dict = {
-            "MethaneSAT_Level1b": "ch4",
-            "MethaneSAT_Level2_post": "post_product",
-            "MethaneSAT_Level3_regrid": "regrid",
-            "MethaneSAT_Level4_area": "analysis",
-            "MethaneSAT_Level4_area_twostep": "analysis",
-        }
+        asset_dict = main_asset_dict
 
     L2_flagged_fraction_dict = {}
     L2_pid_dict = {}
@@ -297,7 +298,7 @@ def get_target_dict_from_stac(
         p = it.properties["processing_id"]
         v = it.properties.get("processor_version")
         if v is None:
-            v = extract_version(it.assets[asset_dict[collection_name]].href)
+            v = extract_version(it.assets[main_asset_dict[collection_name]].href)
         if min_version is not None and not is_version_higher(v, min_version):
             continue
         if L2_flagged_fraction_dict.get(c, 1) > max_flagged_fraction:
