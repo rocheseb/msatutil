@@ -895,7 +895,15 @@ def make_msat_targets_map(
             file_type_select_options += ["Images (gs)"]
         if google_drive_id is not None:
             file_type_select_options += ["Images (gdrive)"]
-        if do_html or image_bucket is not None or google_drive_id is not None:
+        selectable_file_type = (
+            do_html
+            or image_bucket is not None
+            or stac_collection is not None
+            or google_drive_id is not None
+        )
+        if selectable_file_type and stac_collection and "Level0" in stac_collection:
+            selectable_file_type = False
+        if selectable_file_type:
             file_type_select = Select(
                 options=file_type_select_options, value="Data", title="File type:"
             )
@@ -1117,7 +1125,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "date_slider": date_slider,
         }
-        if do_html or image_bucket is not None or google_drive_id is not None:
+        if selectable_file_type:
             date_slider_button_callback_args["file_type_select"] = file_type_select
         date_slider_button.js_on_click(
             CustomJS(
@@ -1176,7 +1184,7 @@ def make_msat_targets_map(
             "scatter_source": scatter_source,
             "poly_source": poly_source,
         }
-        if do_html or image_bucket is not None or google_drive_id is not None:
+        if selectable_file_type:
             box_select_callback_args["file_type_select"] = file_type_select
         bokeh_plot.js_on_event(
             "selectiongeometry",
@@ -1337,7 +1345,7 @@ def make_msat_targets_map(
             "country_input": country_input,
             "scatter_source": scatter_source,
         }
-        if do_html or image_bucket is not None or google_drive_id is not None:
+        if selectable_file_type:
             country_button_callback_args["file_type_select"] = file_type_select
         country_button = Button(label="Copy collection paths in selected country", width=300)
         country_button.js_on_click(
@@ -1456,7 +1464,7 @@ def make_msat_targets_map(
             main_tab = TabPanel(child=map, title="Map")
             notes_tab = TabPanel(child=note_div, title="Information")
             layout = Tabs(tabs=[main_tab, notes_tab])
-        elif do_html or image_bucket is not None or google_drive_id is not None:
+        elif selectable_file_type:
             layout = Row(
                 bokeh_plot,
                 Column(
