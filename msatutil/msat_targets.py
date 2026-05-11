@@ -42,6 +42,34 @@ gv.extension("bokeh")
 GOOGLE_IMAGERY = WMTS("https://mt1.google.com/vt/lyrs=s&x={X}&y={Y}&z={Z}", name="GoogleImagery")
 
 
+def is_version_higher(version: str, min_version: str) -> bool:
+    """
+    Check if a version string is higher than a minimum version
+
+    Inputs:
+        version (str): version string with optional 'v' prefix e.g. "v1.12.3"
+        min_version (str): minimum version string e.g. "1.2.3"
+    Outputs:
+        (bool): True if version > min_version, False otherwise
+    Raises:
+        ValueError: if version or min_version are not in the expected format
+    """
+    pattern = r"v?(\d+)\.(\d+)\.(\d+)"
+
+    v_match = re.fullmatch(pattern, version)
+    m_match = re.fullmatch(pattern, min_version)
+
+    if not v_match:
+        raise ValueError(f"version '{version}' must be in format 'vX.Y.Z'")
+    if not m_match:
+        raise ValueError(f"min_version '{min_version}' must be in format 'X.Y.Z'")
+
+    v_parts = tuple(int(x) for x in v_match.groups())
+    m_parts = tuple(int(x) for x in m_match.groups())
+
+    return v_parts >= m_parts
+
+
 def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     """
     Get a YYYYMMDDTHHMMSS timestamp from a string
@@ -63,6 +91,23 @@ def extract_timestamp(text: str, case_a: bool = False) -> Optional[str]:
     if match:
         return pd.to_datetime(datetime.strptime(match.group(match_id), time_fmt), format=time_fmt)
     return None
+
+
+def extract_version(text: str) -> Optional[str]:
+    """
+    Extract a version string from a pattern "vXXYYYZZZ" (zero-padded)
+
+    Inputs:
+        text (str): input string containing the version pattern e.g. "abc_v010002003_xyz"
+    Outputs:
+        (Optional[str]): version string in format "X.Y.Z" or None if not found
+    """
+    match = re.search(r"v(\d{2})(\d{3})(\d{3})", text)
+    if not match:
+        return None
+
+    x, y, z = (int(g) for g in match.groups())
+    return f"{x}.{y}.{z}"
 
 
 def derive_L2_html_path(
@@ -186,6 +231,7 @@ def get_target_dict_from_stac(
     max_flagged_fraction: float = 1,
     asset_key: Optional[str] = None,
     images: bool = False,
+    min_version: Optional[str] = None,
     **kwargs,
 ) -> dict:
     """
@@ -198,6 +244,7 @@ def get_target_dict_from_stac(
         max_flagged_fraction (float): only includes collections that have less than this flag fraction
         asset_key (Optional[str]): the stac asset name to use (defaults to the netcdf data file)
         images (bool): if True, change the default asset_dict
+        min_version (Optional[str]): minimum version to include
     Outputs:
         d (dict): dictionary of collections only retaining the highest processing ID for each collection
     """
@@ -218,7 +265,7 @@ def get_target_dict_from_stac(
             "MethaneSAT_Level3_regrid": "regrid",
             "MethaneSAT_Level4_area": "analysis",
             "MethaneSAT_Level4_area_twostep": "analysis",
-        }        
+        }
 
     L2_flagged_fraction_dict = {}
     L2_pid_dict = {}
@@ -247,6 +294,9 @@ def get_target_dict_from_stac(
         t = int(it.properties["target_id"])
         c = it.properties["collection_id"]
         p = it.properties["processing_id"]
+        v = it.properties["processor_version"]
+        if min_version is not None and not is_version_higher(v, min_version):
+            continue
         if L2_flagged_fraction_dict.get(c, 1) > max_flagged_fraction:
             continue
         two_step_core = it.properties.get("two_step_core", False)
@@ -271,7 +321,10 @@ def get_target_dict_from_stac(
 
 
 def get_target_dict_from_file_list(
-    file_list: str, func: Callable = gs_posixpath_to_str, **kwargs
+    file_list: str,
+    func: Callable = gs_posixpath_to_str,
+    min_version: Optional[str] = None,
+    **kwargs,
 ) -> dict:
     """
     Parse a list of MSAT bucket paths and store them in a dictionary by target/collect/processing_id
@@ -279,6 +332,7 @@ def get_target_dict_from_file_list(
     Inputs:
         file_list (str): full path to input file listing MSAT bucket paths
         func (Callable): function to apply on the paths to get the dict values
+        min_version (Optional[str]): minimum version to include
         kwargs (dict): passed to func
     Outputs:
         d (dict): dictionary of targets by target/collect/processing_id
@@ -312,6 +366,10 @@ def get_target_dict_from_file_list(
                     continue
         else:
             p = int(i.parts[pindex].strip("p"))
+            if min_version is not None:
+                v = extract_version(str(i))
+                if not is_version_higher(v, min_version):
+                    continue
         if t not in d:
             d[t] = {}
         if c not in d[t]:
@@ -337,11 +395,16 @@ def get_target_dict_from_file_list(
     return d
 
 
-def get_target_dict_from_images(file_list: str, public_bucket: Optional[str] = None) -> dict:
+def get_target_dict_from_images(
+    file_list: str,
+    public_bucket: Optional[str] = None,
+    min_version: Optional[str] = None,
+) -> dict:
     """
     Inputs:
         file_list (str): full path to input file listing MSAT bucket paths to images
         public_bucket (Optional[str]): use to generate links to a different bucket
+        min_version (Optional[str]): minimum version to include
     Outputs:
         d (dict): dictionary of targets by target/collect/processing_id
     """
@@ -368,6 +431,10 @@ def get_target_dict_from_images(file_list: str, public_bucket: Optional[str] = N
         t = int(match.group("target_id"))
         c = match.group("collection_id")
         p = int(match.group("processing_id"))
+        if min_version is not None:
+            v = extract_version(i)
+            if not is_version_higher(v, min_version):
+                continue
         if t not in d:
             d[t] = {}
         if c not in d[t]:
@@ -454,6 +521,7 @@ def make_msat_targets_map(
     nhighlight: Optional[int] = None,
     public: bool = False,
     public_bucket: Optional[str] = None,
+    min_version: Optional[str] = None,
     write: bool = True,
 ):
     """
@@ -508,15 +576,18 @@ def make_msat_targets_map(
     ]
 
     map_tools = ["hover", "fullscreen", "tap"]
-    if file_list is not None or stac_catalog is not None:
+    if file_list is not None or stac_collection is not None:
         map_tools += ["box_select"]
         if public:
-            td = get_target_dict_from_images(file_list, public_bucket)
+            td = get_target_dict_from_images(file_list, public_bucket, min_version=min_version)
         elif file_list is not None:  # prioritize file_list if given when also giving a stac address
-            td = get_target_dict_from_file_list(file_list)
-        elif stac_catalog is not None:
+            td = get_target_dict_from_file_list(file_list, min_version=min_version)
+        elif stac_collection is not None:
             td = get_target_dict_from_stac(
-                stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
+                stac_catalog,
+                stac_collection,
+                max_flagged_fraction=max_flagged_fraction,
+                min_version=min_version,
             )
         first_path = list(next(iter(next(iter(td.values())).values())).values())[0]
         is_L2 = "_L2_" in first_path
@@ -544,7 +615,11 @@ def make_msat_targets_map(
             vdims += ["html_files"]
             scatter_df_columns += ["html_file"]
             if is_L2 and file_list is not None:
-                html_td = get_target_dict_from_file_list(file_list, derive_L2_html_path)
+                html_td = get_target_dict_from_file_list(
+                    file_list,
+                    derive_L2_html_path,
+                    min_version=min_version,
+                )
             elif is_L2 and stac_catalog:
                 html_td = get_target_dict_from_stac(
                     stac_catalog,
@@ -552,10 +627,14 @@ def make_msat_targets_map(
                     asset_key="qaqc_html_plots",
                     max_flagged_fraction=max_flagged_fraction,
                     func=gs_posixpath_to_auth_url,
+                    min_version=min_version,
                 )
             elif is_L4 and file_list is not None:
                 html_td = get_target_dict_from_file_list(
-                    file_list, derive_L4_html_path, html_bucket=html_bucket
+                    file_list,
+                    derive_L4_html_path,
+                    html_bucket=html_bucket,
+                    min_version=min_version,
                 )
             elif is_L4 and stac_catalog:
                 html_td = get_target_dict_from_stac(
@@ -564,6 +643,7 @@ def make_msat_targets_map(
                     derive_L4_html_path,
                     max_flagged_fraction=max_flagged_fraction,
                     html_bucket=html_bucket,
+                    min_version=min_version,
                 )
         if image_bucket is not None:
             gdf["image_gs_files"] = ""
@@ -571,15 +651,19 @@ def make_msat_targets_map(
             scatter_df_columns += ["image_gs_file"]
             if file_list is not None:
                 image_td = get_target_dict_from_file_list(
-                    file_list, derive_image_path, image_bucket=image_bucket
+                    file_list,
+                    derive_image_path,
+                    image_bucket=image_bucket,
+                    min_version=min_version,
                 )
-            elif stac_catalog is not None:
+            elif stac_collection is not None:
                 image_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
                     gs_posixpath_to_auth_url,
                     max_flagged_fraction=max_flagged_fraction,
                     images=True,
+                    min_version=min_version,
                 )
         if google_drive_id is not None:
             gdf["image_gdrive_files"] = ""
@@ -591,10 +675,14 @@ def make_msat_targets_map(
                     derive_image_drive_link,
                     service_account_file=service_account_file,
                     google_drive_id=google_drive_id,
+                    min_version=min_version,
                 )
-            elif stac_catalog is not None:
+            elif stac_collection is not None:
                 gdrive_td = get_target_dict_from_stac(
-                    stac_catalog, stac_collection, max_flagged_fraction=max_flagged_fraction
+                    stac_catalog,
+                    stac_collection,
+                    max_flagged_fraction=max_flagged_fraction,
+                    min_version=min_version,
                 )
         scatter_df = pd.DataFrame(columns=scatter_df_columns)
         # a collection ID has 8 characters
@@ -774,7 +862,7 @@ def make_msat_targets_map(
         """,
     )
 
-    if file_list is not None or stac_catalog is not None:
+    if file_list is not None or stac_collection is not None:
         if not public:
             target_code_div = Div(text="Target ID:", width=300)
             target_code_inp = TextInput(value="", title="Convert target code to ID", width=150)
@@ -1234,7 +1322,7 @@ def make_msat_targets_map(
         country_div.text = ids_in_country.length + " target IDs in selected country:<br>"+formattedText;
         """
 
-    if file_list is not None or stac_catalog is not None:
+    if file_list is not None or stac_collection is not None:
         country_input_callback_code += """
             const countries_scatter = scatter_source.data["country"];
             const ncollects = countries_scatter.filter(item => item === cb_obj.value).length;
@@ -1306,7 +1394,7 @@ def make_msat_targets_map(
         ),
     )
 
-    if file_list is not None or stac_catalog is not None:
+    if file_list is not None or stac_collection is not None:
         if public:
             note_div = Div(
                 width=1000,
@@ -1436,6 +1524,7 @@ def make_msat_targets_map_tabs(
     nhighlight: Optional[list[Optional[int]]] = None,
     public: bool = False,
     public_bucket: Optional[list[Optional[str]]] = None,
+    min_version: Optional[list[Optional[str]]] = None,
 ):
     """
     Read the list of targets from the infile geojson file
@@ -1469,6 +1558,7 @@ def make_msat_targets_map_tabs(
                 nhighlight[i],
                 public,
                 public_bucket[i],
+                min_version[i],
                 write=False,
             ),
             title=v,
@@ -1596,6 +1686,13 @@ def main():
         nargs="+",
         help="Targets with >=nhighlight collections will be highlighted in orange",
     )
+    parser.add_argument(
+        "--min-version",
+        default=[None],
+        type=none_or_str,
+        nargs="+",
+        help="For each level, the minimum version number to include",
+    )
     args = parser.parse_args()
 
     print(datetime.strftime(datetime.utcnow(), "%Y-%m-%d UPDATE MSAT MAP"))
@@ -1618,6 +1715,7 @@ def main():
             args.nhighlight[0],
             args.public,
             args.public_bucket[0],
+            args.min_version[0],
         )
     else:
         if (
@@ -1657,6 +1755,7 @@ def main():
             args.nhighlight,
             args.public,
             args.public_bucket,
+            args.min_version,
         )
 
 
