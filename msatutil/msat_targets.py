@@ -647,7 +647,7 @@ def make_msat_targets_map(
                     html_bucket=html_bucket,
                     min_version=min_version,
                 )
-        if image_bucket is not None:
+        if image_bucket is not None or stac_collection is not None:
             gdf["image_gs_files"] = ""
             vdims += ["image_gs_files"]
             scatter_df_columns += ["image_gs_file"]
@@ -683,6 +683,8 @@ def make_msat_targets_map(
                 gdrive_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
+                    derive_image_drive_link,
+                    service_account_file=service_account_file,
                     max_flagged_fraction=max_flagged_fraction,
                     min_version=min_version,
                 )
