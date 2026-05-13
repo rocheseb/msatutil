@@ -47,25 +47,26 @@ def is_version_higher(version: str, min_version: str) -> bool:
     Check if a version string is higher than a minimum version
 
     Inputs:
-        version (str): version string with optional 'v' prefix e.g. "v1.12.3"
-        min_version (str): minimum version string e.g. "1.2.3"
+        version (str): version string with optional 'v' prefix and partial components
+                       e.g. "v1", "v1.12", "v1.12.3"
+        min_version (str): minimum version string e.g. "1", "1.2", "1.2.3"
     Outputs:
-        (bool): True if version > min_version, False otherwise
+        (bool): True if version >= min_version, False otherwise
     Raises:
         ValueError: if version or min_version are not in the expected format
     """
-    pattern = r"v?(\d+)\.(\d+)\.(\d+)"
+    pattern = r"v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?"
 
     v_match = re.fullmatch(pattern, version)
     m_match = re.fullmatch(pattern, min_version)
 
     if not v_match:
-        raise ValueError(f"version '{version}' must be in format 'vX.Y.Z'")
+        raise ValueError(f"version '{version}' must be in format 'vX[.Y[.Z]]'")
     if not m_match:
-        raise ValueError(f"min_version '{min_version}' must be in format 'X.Y.Z'")
+        raise ValueError(f"min_version '{min_version}' must be in format 'X[.Y[.Z]]'")
 
-    v_parts = tuple(int(x) for x in v_match.groups())
-    m_parts = tuple(int(x) for x in m_match.groups())
+    v_parts = tuple(int(x) if x is not None else 0 for x in v_match.groups())
+    m_parts = tuple(int(x) if x is not None else 0 for x in m_match.groups())
 
     return v_parts >= m_parts
 
@@ -362,7 +363,7 @@ def get_target_dict_from_file_list(
         c = i.parts[cindex].strip("c")
         if is_L0:
             p = i.parts[pindex]
-            if p != "v1":
+            if not p.startswith("v"):
                 try:
                     p = int(re.search(r"(?i)po[-_](\d{4})", p).group(1))
                 except Exception:
@@ -381,9 +382,14 @@ def get_target_dict_from_file_list(
         # if a processing exists, overwrite with the higher pid
         if d[t][c] != {}:
             old_p = list(d[t][c].keys())[0]
-            if is_L0 and old_p == "v1":
+            if is_L0 and type(old_p) is str and type(p) is str and is_version_higher(old_p, p):
+                # when both versions are "vX.Y.Z" and old_p is higher, keep it
                 continue
-            elif is_L0 and p == "v1":
+            elif is_L0 and type(old_p) is str:
+                # if only old_p is "vX.Y.Z", keep it
+                continue
+            elif is_L0 and type(p) is str:
+                # if only p is "vX.Y.Z", update with p
                 pass
             elif p < old_p:
                 continue
