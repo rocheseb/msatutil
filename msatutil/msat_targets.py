@@ -1524,7 +1524,7 @@ def make_msat_targets_map(
         with open(outfile, "w") as out:
             out.write(file_html(layout, CDN, "MethaneSAT targets", suppress_callback_warning=True))
 
-    return layout
+    return layout, bokeh_plot
 
 
 def make_msat_targets_map_tabs(
@@ -1560,9 +1560,9 @@ def make_msat_targets_map_tabs(
         public (bool): if True, only link bucket images and only show targets with at least 1 collect
     """
 
-    tabs = [
-        TabPanel(
-            child=make_msat_targets_map(
+    layouts, maps = zip(
+        *[
+            make_msat_targets_map(
                 infile,
                 outfile,
                 title,
@@ -1579,11 +1579,17 @@ def make_msat_targets_map_tabs(
                 public_bucket[i],
                 min_version[i],
                 write=False,
-            ),
-            title=v,
-        )
-        for i, v in enumerate(tab_title)
-    ]
+            )
+            for i, v in enumerate(tab_title)
+        ]
+    )
+
+    if len(maps) > 1:
+        for m in maps[1:]:
+            m.x_range = maps[0].x_range
+            m.y_range = maps[0].y_range
+
+    tabs = [TabPanel(child=layouts[i], title=v) for i, v in enumerate(tab_title)]
 
     layout = Tabs(
         tabs=tabs,
