@@ -296,7 +296,7 @@ def get_target_dict_from_stac(
         collection_name = it.collection_id
         t = int(it.properties["target_id"])
         c = it.properties["collection_id"]
-        p = it.properties["processing_id"]
+        p = int(it.properties["processing_id"])
         v = it.properties.get("processor_version")
         if v is None:
             v = extract_version(it.assets[main_asset_dict[collection_name]].href)
@@ -312,7 +312,7 @@ def get_target_dict_from_stac(
             d[t][c] = {}
         if d[t][c] != {}:
             old_p = list(d[t][c].keys())[0]
-            if old_p < p:
+            if p < old_p:
                 continue
             elif old_p == p and not two_step_core:
                 continue
