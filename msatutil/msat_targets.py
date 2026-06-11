@@ -649,9 +649,9 @@ def make_msat_targets_map(
                 html_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
-                    derive_L4_html_path,
+                    asset_key="qaqc_site",
+                    func=lambda x, **kwargs: str(x).replace("https:/","https://"),
                     max_flagged_fraction=max_flagged_fraction,
-                    html_bucket=html_bucket,
                     min_version=min_version,
                 )
         if image_bucket is not None or stac_collection is not None:
@@ -972,7 +972,13 @@ def make_msat_targets_map(
                       `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
                       "<b>File paths copied:</b><br>" +
                       combined_paths.split('\\n').map(path => {
-                        const name = path.split(/[/\\\\]/).pop();
+                        let name;
+                        if (path.includes('core-qaqc')) {
+                            const match = path.match(/\\/core\\/(t\\d+)\\/(\\d+)\\/(c[0-9a-f]+)\\/(p\\d+)/i);
+                            name = match ? `${match[1]} ${match[2]} ${match[3]} ${match[4]}` : path;
+                        } else {
+                            name = path.split(/[/\\\\]/).pop();
+                        }                        
                         return `<a href='${path}' target='_blank'>${name}</a>`;
                       }).join('<br>');
                     popup.style.display = "block";
