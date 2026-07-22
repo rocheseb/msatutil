@@ -33,6 +33,7 @@ from bokeh.plotting import figure
 from bokeh.resources import CDN
 from geoviews.element import WMTS
 from pystac_client import Client
+from shapely.affinity import translate
 
 from msatutil.msat_dset import gs_list
 from msatutil.msat_gdrive import get_file_link
@@ -40,6 +41,23 @@ from msatutil.msat_gdrive import get_file_link
 gv.extension("bokeh")
 
 GOOGLE_IMAGERY = WMTS("https://mt1.google.com/vt/lyrs=s&x={X}&y={Y}&z={Z}", name="GoogleImagery")
+
+
+def offset_duplicate_geometries(gdf: gpd.GeoDataFrame, offset: float = 0.00001) -> gpd.GeoDataFrame:
+    """
+    Bokeh uses geometries as keys so if there are duplicate polygons only 1 will be retained
+    This slightly offset duplicate polygons to avoid the issue.
+
+    Inputs:
+        gdf (gpd.GeoDataFrame): input dataframe
+        offset (float): coordinates offset to add
+    """
+    gdf = gdf.copy()
+    dupe_mask = gdf.duplicated(subset=["geometry"], keep="first")
+    gdf.loc[dupe_mask, "geometry"] = gdf.loc[dupe_mask, "geometry"].apply(
+        lambda geom: translate(geom, xoff=offset, yoff=offset)
+    )
+    return gdf
 
 
 def is_version_higher(version: str, min_version: str) -> bool:
@@ -552,6 +570,7 @@ def make_msat_targets_map(
         write (bool): if True, write the html map file
     """
     gdf = gpd.read_file(infile)
+    gdf = offset_duplicate_geometries(gdf)
 
     gdf["country"] = gdf.apply(
         lambda row: get_country(row["centroid_lat"], row["centroid_lon"]), axis=1
@@ -650,7 +669,7 @@ def make_msat_targets_map(
                     stac_catalog,
                     stac_collection,
                     asset_key="qaqc_site",
-                    func=lambda x, **kwargs: str(x).replace("https:/","https://"),
+                    func=lambda x, **kwargs: str(x).replace("https:/", "https://"),
                     max_flagged_fraction=max_flagged_fraction,
                     min_version=min_version,
                 )
