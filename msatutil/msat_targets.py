@@ -1,12 +1,11 @@
 import argparse
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path, PosixPath
 from typing import Callable, Optional
 
 import geopandas as gpd
 import geoviews as gv
-from google.cloud import storage
 import holoviews as hv
 import pandas as pd
 import reverse_geocode
@@ -651,7 +650,7 @@ def make_msat_targets_map(
                     stac_catalog,
                     stac_collection,
                     asset_key="qaqc_site",
-                    func=lambda x, **kwargs: str(x).replace("https:/", "https://"),
+                    func=lambda x, **kwargs: str(x).replace("https:/","https://"),
                     max_flagged_fraction=max_flagged_fraction,
                     min_version=min_version,
                 )
@@ -668,14 +667,6 @@ def make_msat_targets_map(
                 )
             elif stac_collection is not None:
                 image_td = get_target_dict_from_stac(
-                    stac_catalog,
-                    stac_collection,
-                    gs_posixpath_to_auth_url,
-                    max_flagged_fraction=max_flagged_fraction,
-                    images=True,
-                    min_version=min_version,
-                )
-                image_preview_td = get_target_dict_from_stac(
                     stac_catalog,
                     stac_collection,
                     gs_posixpath_to_auth_url,
