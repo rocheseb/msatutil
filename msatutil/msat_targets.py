@@ -934,14 +934,14 @@ def make_msat_targets_map(
                 key = 'collections';
             }
 
-            // --- Popup div ---
+            // Only create the popup div if it doesn't exist
             if (!document.getElementById("popup-div")) {
                 const popup = document.createElement("div");
                 popup.id = "popup-div";
                 popup.style.position = "fixed";
                 popup.style.top = "20%";
                 popup.style.left = "40%";
-                popup.style.transform = "translate(-50%, -50%)";
+                popup.style.transform = "translate(-50%, -50%)";  // shift by half its size
                 popup.style.zIndex = "9999";
                 popup.style.background = "white";
                 popup.style.border = "1px solid black";
@@ -953,38 +953,23 @@ def make_msat_targets_map(
                 document.body.appendChild(popup);
             }
 
-            // --- Hover preview image element ---
-            if (!document.getElementById("link-preview-img")) {
-                const previewImg = document.createElement("img");
-                previewImg.id = "link-preview-img";
-                previewImg.style.position = "fixed";
-                previewImg.style.zIndex = "10000";
-                previewImg.style.maxWidth = "300px";
-                previewImg.style.maxHeight = "300px";
-                previewImg.style.border = "2px solid #aaa";
-                previewImg.style.borderRadius = "4px";
-                previewImg.style.boxShadow = "3px 3px 12px rgba(0,0,0,0.45)";
-                previewImg.style.background = "#fff";
-                previewImg.style.display = "none";
-                previewImg.style.pointerEvents = "none";
-                document.body.appendChild(previewImg);
-            }
-
             if (selected_indices.length > 0) {
                 let all_collections = [];
+                
+                // Loop over all selected polygons
                 for (let i = 0; i < selected_indices.length; i++) {
                     const idx = selected_indices[i];
-                    all_collections.push(poly_source.data[key][idx]);
+                    const collections = poly_source.data[key][idx];
+                    all_collections.push(collections);
                 }
+                
                 const combined_paths = all_collections.join('\\n');
 
+                // Copy to clipboard
                 navigator.clipboard.writeText(combined_paths).then(function() {
                     const popup = document.getElementById("popup-div");
-
                     popup.innerHTML =
-                      `<div style='text-align:right; font-weight:bold; cursor:pointer;'
-                            onclick='this.parentElement.style.display="none";
-                                     document.getElementById("link-preview-img").style.display="none";'>×</div>` +
+                      `<div style='text-align:right; font-weight:bold; cursor:pointer;' onclick='this.parentElement.style.display="none"'>×</div>` +
                       "<b>File paths copied:</b><br>" +
                       combined_paths.split('\\n').map(path => {
                         let name;
@@ -993,41 +978,14 @@ def make_msat_targets_map(
                             name = match ? `${match[1]} ${match[2]} ${match[3]} ${match[4]}` : path;
                         } else {
                             name = path.split(/[/\\\\]/).pop();
-                        }
-                        const isImage = /\\.png$/i.test(path);
-                        return `<a href='${path}' target='_blank'${isImage ? ` data-preview='${path}'` : ''}>${name}</a>`;
+                        }                        
+                        return `<a href='${path}' target='_blank'>${name}</a>`;
                       }).join('<br>');
-
                     popup.style.display = "block";
-
-                    popup.querySelectorAll('a[data-preview]').forEach(link => {
-                        const previewImg = document.getElementById('link-preview-img');
-
-                        link.addEventListener('mouseover', function() {
-                            previewImg.onerror = () => { previewImg.style.display = 'none'; };
-                            previewImg.src = this.getAttribute('data-preview');
-                            previewImg.style.display = 'block';
-                            positionPreview(previewImg);
-                        });
-
-                        link.addEventListener('mouseout', function() {
-                            previewImg.style.display = 'none';
-                            previewImg.src = '';
-                        });
-                    });
-
                 }, function(err) {
                     console.error('Failed to copy text: ', err);
                 });
             }
-
-            function positionPreview(img) {
-                const popup = document.getElementById('popup-div');
-                const rect = popup.getBoundingClientRect();
-                img.style.left = rect.right + 'px';
-                img.style.top  = rect.top + 'px';
-            }
-
             poly_source.selected.indices = [];
             poly_source.change.emit();
         """,
